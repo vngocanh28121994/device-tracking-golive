@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
+import { getChatGPTUser } from "../../chatgpt-auth";
 import { getDb } from "../../../db";
-import { dailyChecks, devices } from "../../../db/schema";
+import { dailyChecks, devices, userProfiles } from "../../../db/schema";
 
 const samples = [
   { id: "sample-laptop", name: "Laptop Dell Latitude", code: "LT-001", category: "Laptop", quantity: 8, holder: "Kho thiết bị", condition: "Tốt", note: "Dữ liệu mẫu" },
@@ -17,6 +18,7 @@ const validDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
 const error = (message: string, status = 400) => Response.json({ error: message }, { status });
 
 export async function GET(request: Request) {
+  if (!await getChatGPTUser()) return error("Vui lòng đăng nhập để sử dụng trang.", 401);
   try {
     const db = getDb();
     let all = await db.select().from(devices);
@@ -34,6 +36,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const user = await getChatGPTUser();
+  if (!user) return error("Vui lòng đăng nhập để sử dụng trang.", 401);
   try {
     const body = await request.json() as Record<string, unknown>;
     const db = getDb();
@@ -72,17 +76,21 @@ export async function POST(request: Request) {
       const holder = clean(body.holder, 100);
       const condition = clean(body.condition, 30);
       const note = clean(body.note, 500);
-      const checkedBy = clean(body.checkedBy, 100);
       if (!validDate(date)) return error("Ngày kiểm kê không hợp lệ.");
       const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
       if (date !== today) return error("Chỉ có thể chốt kiểm kê cho ngày hôm nay.");
-      if (!deviceId || !holder || !checkedBy) return error("Cần nhập người giữ và người kiểm tra.");
+      if (!deviceId || !holder) return error("Cần nhập người giữ thiết bị.");
       if (!Number.isInteger(quantity) || quantity < 0 || quantity > 100000) return error("Số lượng không hợp lệ.");
       if (!validConditions.includes(condition)) return error("Tình trạng không hợp lệ.");
       const rows = await db.select().from(devices).where(and(eq(devices.id, deviceId), eq(devices.archived, false))).limit(1);
       if (!rows.length) return error("Thiết bị không còn trong danh sách.", 404);
-      await db.insert(dailyChecks).values({ date, deviceId, quantity, holder, condition, note, checkedBy, checkedAt: now })
-        .onConflictDoUpdate({ target: [dailyChecks.date, dailyChecks.deviceId], set: { quantity, holder, condition, note, checkedBy, checkedAt: now } });
+      const [profile] = await db.select().from(userProfiles).where(eq(userProfiles.userId, user.userId)).limit(1);
+      if (!profile) return error("Hãy đặt tên hiển thị cho tài khoản trước khi chốt kiểm kê.");
+      const checkedBy = profile.displayName;
+      const checkedByUserId = user.userId;
+      const checkedByEmail = user.email;
+      await db.insert(dailyChecks).values({ date, deviceId, quantity, holder, condition, note, checkedBy, checkedByUserId, checkedByEmail, checkedAt: now })
+        .onConflictDoUpdate({ target: [dailyChecks.date, dailyChecks.deviceId], set: { quantity, holder, condition, note, checkedBy, checkedByUserId, checkedByEmail, checkedAt: now } });
       await db.update(devices).set({ quantity, holder, condition, updatedAt: now }).where(eq(devices.id, deviceId));
       return Response.json({ ok: true });
     }
