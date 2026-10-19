@@ -94,19 +94,26 @@ export async function POST(request: Request) {
       return Response.json({ ok: true });
     }
 
+    if (body.action === "confirm-hold" || body.action === "lend-device") {
+      const deviceId = clean(body.deviceId, 100);
+      if (!deviceId) return error("Thiếu mã thiết bị.");
+      const [device] = await db.select({ id: devices.id }).from(devices).where(and(eq(devices.id, deviceId), eq(devices.archived, false))).limit(1);
+      if (!device) return error("Thiết bị không còn trong danh sách.", 404);
+      const [profile] = await db.select().from(userProfiles).where(eq(userProfiles.userId, user.userId)).limit(1);
+      if (!profile) return error("Hãy đặt tên hiển thị cho tài khoản trước khi thao tác.");
+      const holder = body.action === "confirm-hold" ? profile.displayName : clean(body.borrower, 100);
+      if (!holder) return error("Vui lòng nhập tên người hoặc team mượn.");
+      await db.update(devices).set({ holder, updatedAt: now }).where(eq(devices.id, deviceId));
+      return Response.json({ ok: true, holder });
+    }
+
     if (body.action === "save-check") {
       const date = clean(body.date, 10);
       const deviceId = clean(body.deviceId, 100);
-      const quantity = Number(body.quantity);
-      const holder = clean(body.holder, 100);
-      const condition = clean(body.condition, 30);
-      const note = clean(body.note, 500);
       if (!validDate(date)) return error("Ngày kiểm kê không hợp lệ.");
       const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
       if (date !== today) return error("Chỉ có thể chốt kiểm kê cho ngày hôm nay.");
-      if (!deviceId || !holder) return error("Cần nhập người giữ thiết bị.");
-      if (!Number.isInteger(quantity) || quantity < 0 || quantity > 100000) return error("Số lượng không hợp lệ.");
-      if (!validConditions.includes(condition)) return error("Tình trạng không hợp lệ.");
+      if (!deviceId) return error("Thiếu mã thiết bị.");
       const rows = await db.select().from(devices).where(and(eq(devices.id, deviceId), eq(devices.archived, false))).limit(1);
       if (!rows.length) return error("Thiết bị không còn trong danh sách.", 404);
       const [profile] = await db.select().from(userProfiles).where(eq(userProfiles.userId, user.userId)).limit(1);
@@ -114,6 +121,10 @@ export async function POST(request: Request) {
       const checkedBy = profile.displayName;
       const checkedByUserId = user.userId;
       const checkedByEmail = user.email;
+      const quantity = rows[0].quantity;
+      const holder = checkedBy;
+      const condition = rows[0].condition;
+      const note = rows[0].note;
       await db.insert(dailyChecks).values({ date, deviceId, quantity, holder, condition, note, checkedBy, checkedByUserId, checkedByEmail, checkedAt: now })
         .onConflictDoUpdate({ target: [dailyChecks.date, dailyChecks.deviceId], set: { quantity, holder, condition, note, checkedBy, checkedByUserId, checkedByEmail, checkedAt: now } });
       await db.update(devices).set({ quantity, holder, condition, updatedAt: now }).where(eq(devices.id, deviceId));
