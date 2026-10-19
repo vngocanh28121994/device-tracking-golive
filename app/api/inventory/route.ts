@@ -120,12 +120,11 @@ export async function POST(request: Request) {
       const checkedByUserId = user.userId;
       const checkedByEmail = user.email;
       const quantity = rows[0].quantity;
-      const holder = checkedBy;
+      const holder = rows[0].holder;
       const condition = rows[0].condition;
       const note = rows[0].note;
       await db.insert(dailyChecks).values({ date, deviceId, quantity, holder, condition, note, checkedBy, checkedByUserId, checkedByEmail, checkedAt: now })
         .onConflictDoUpdate({ target: [dailyChecks.date, dailyChecks.deviceId], set: { quantity, holder, condition, note, checkedBy, checkedByUserId, checkedByEmail, checkedAt: now } });
-      await db.update(devices).set({ quantity, holder, condition, updatedAt: now }).where(eq(devices.id, deviceId));
       return Response.json({ ok: true });
     }
     return error("Thao tác không hợp lệ.");
