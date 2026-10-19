@@ -75,13 +75,11 @@ export async function POST(request: Request) {
       const holder = clean(body.holder, 100) || "Chưa xác định";
       const condition = clean(body.condition, 30) || "Chưa kiểm tra";
       const note = clean(body.note, 500);
-      const quantity = Number(body.quantity);
       if (!name) return error("Vui lòng nhập tên thiết bị.");
-      if (!Number.isInteger(quantity) || quantity < 0 || quantity > 100000) return error("Số lượng phải từ 0 đến 100.000.");
       if (!validConditions.includes(condition)) return error("Tình trạng không hợp lệ.");
       const id = clean(body.id, 100) || crypto.randomUUID();
       const existing = await db.select({ id: devices.id }).from(devices).where(eq(devices.id, id)).limit(1);
-      const values = { name, code, category, holder, condition, note, quantity, updatedAt: now };
+      const values = { name, code, category, holder, condition, note, quantity: 1, updatedAt: now };
       if (existing.length) await db.update(devices).set(values).where(eq(devices.id, id));
       else await db.insert(devices).values({ id, ...values });
       return Response.json({ ok: true, id });
