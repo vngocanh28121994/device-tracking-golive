@@ -9,7 +9,7 @@ Trang quản lý thiết bị điện tử với giao diện tiếng Việt.
 - Chốt kiểm kê cuối ngày theo số lượng thực tế, người đang giữ, tình trạng, ghi chú và người kiểm tra.
 - Mỗi người được cấp quyền đặt tên hiển thị cho tài khoản ChatGPT của mình; lần kiểm kê mới tự ghi tên, email và ID tài khoản đã đăng nhập.
 - Xem lịch sử checklist theo ngày và xuất CSV.
-- Dữ liệu được lưu trong Cloudflare D1. Khi cơ sở dữ liệu trống lần đầu, trang tạo sáu dòng mẫu có ghi rõ “Dữ liệu mẫu”.
+- Dữ liệu được lưu trong Cloudflare D1. Danh sách khởi tạo có 15 thiết bị iOS và Android do người dùng cung cấp; mỗi dòng tạm tính một thiết bị, với người giữ và tình trạng chưa xác định cho tới khi được kiểm kê.
 
 Mỗi dòng thiết bị đại diện cho một nhóm có cùng người giữ. Nếu một loại thiết bị được nhiều người giữ, tạo riêng một dòng cho mỗi người.
 

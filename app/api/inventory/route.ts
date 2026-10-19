@@ -1,21 +1,38 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { getChatGPTUser } from "../../chatgpt-auth";
 import { getDb } from "../../../db";
 import { dailyChecks, devices, userProfiles } from "../../../db/schema";
 
-const samples = [
-  { id: "sample-laptop", name: "Laptop Dell Latitude", code: "LT-001", category: "Laptop", quantity: 8, holder: "Kho thiết bị", condition: "Tốt", note: "Dữ liệu mẫu" },
-  { id: "sample-ipad", name: "iPad Gen 10", code: "TB-002", category: "Máy tính bảng", quantity: 5, holder: "Nhóm Marketing", condition: "Tốt", note: "Dữ liệu mẫu" },
-  { id: "sample-camera", name: "Máy ảnh Sony A6400", code: "CA-003", category: "Máy ảnh", quantity: 2, holder: "Minh Anh", condition: "Cần kiểm tra", note: "Dữ liệu mẫu" },
-  { id: "sample-headphone", name: "Tai nghe Sony WH-1000XM5", code: "HP-004", category: "Âm thanh", quantity: 6, holder: "Kho thiết bị", condition: "Tốt", note: "Dữ liệu mẫu" },
-  { id: "sample-projector", name: "Máy chiếu Epson EB-X06", code: "PJ-005", category: "Trình chiếu", quantity: 3, holder: "Phòng họp A", condition: "Tốt", note: "Dữ liệu mẫu" },
-  { id: "sample-microphone", name: "Micro không dây Rode", code: "MC-006", category: "Âm thanh", quantity: 4, holder: "Nhóm Sự kiện", condition: "Cần kiểm tra", note: "Dữ liệu mẫu" },
+const initialDevices = [
+  { id: "ios-iphone-se", name: "iPhone SE", category: "iOS" },
+  { id: "ios-iphone-16-promax", name: "iPhone 16 promax", category: "iOS" },
+  { id: "ios-iphone-12-promax", name: "iPhone 12 promax", category: "iOS" },
+  { id: "ios-iphone-12-pro", name: "iPhone 12 pro", category: "iOS" },
+  { id: "ios-ipad-air-11", name: "iPad Air 11 inch", category: "iOS" },
+  { id: "ios-ipad-pro-2015", name: "iPad Pro (2015)", category: "iOS" },
+  { id: "ios-ipad-pro-2018", name: "iPad Pro (2018)", category: "iOS" },
+  { id: "ios-iphone-12-promax-new", name: "iPhone 12 promax (mới nhận)", category: "iOS" },
+  { id: "android-samsung-s23-ultra", name: "Samsung S23 Ultra", category: "Android" },
+  { id: "android-samsung-a56", name: "Samsung A56", category: "Android" },
+  { id: "android-samsung-a51", name: "Samsung A51", category: "Android" },
+  { id: "android-xiaomi-14t", name: "Xiaomi 14T", category: "Android" },
+  { id: "android-oppo-find-x9", name: "Oppo Find X9", category: "Android" },
+  { id: "android-redmi-note-14", name: "Redmi Note 14", category: "Android" },
+  { id: "android-samsung-a52", name: "Samsung A52", category: "Android" },
 ];
+const oldSampleIds = ["sample-laptop", "sample-ipad", "sample-camera", "sample-headphone", "sample-projector", "sample-microphone"];
 
-const validConditions = ["Tốt", "Cần kiểm tra", "Hỏng"];
+const validConditions = ["Chưa kiểm tra", "Tốt", "Cần kiểm tra", "Hỏng"];
 const clean = (value: unknown, max = 200) => typeof value === "string" ? value.trim().slice(0, max) : "";
 const validDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
 const error = (message: string, status = 400) => Response.json({ error: message }, { status });
+async function insertInitialDevices(db: ReturnType<typeof getDb>, now: string) {
+  for (let i = 0; i < initialDevices.length; i += 5) {
+    await db.insert(devices).values(initialDevices.slice(i, i + 5).map((item) => ({
+      ...item, code: "", quantity: 1, holder: "Chưa xác định", condition: "Chưa kiểm tra", note: "", updatedAt: now,
+    }))).onConflictDoNothing();
+  }
+}
 
 export async function GET(request: Request) {
   if (!await getChatGPTUser()) return error("Vui lòng đăng nhập để sử dụng trang.", 401);
@@ -24,14 +41,16 @@ export async function GET(request: Request) {
     let all = await db.select().from(devices);
     if (all.length === 0) {
       const now = new Date().toISOString();
-      await db.insert(devices).values(samples.map((sample) => ({ ...sample, updatedAt: now }))).onConflictDoNothing();
+      await insertInitialDevices(db, now);
       all = await db.select().from(devices);
     }
     const date = new URL(request.url).searchParams.get("date") ?? "";
-    const checks = validDate(date) ? await db.select().from(dailyChecks).where(eq(dailyChecks.date, date)) : [];
-    return Response.json({ devices: all.filter((item) => !item.archived), checks });
-  } catch (cause) {
-    return error(cause instanceof Error ? cause.message : "Không thể tải dữ liệu", 500);
+    const active = all.filter((item) => !item.archived);
+    const activeIds = new Set(active.map((item) => item.id));
+    const checks = validDate(date) ? (await db.select().from(dailyChecks).where(eq(dailyChecks.date, date))).filter((item) => activeIds.has(item.deviceId)) : [];
+    return Response.json({ devices: active, checks });
+  } catch {
+    return error("Không thể tải dữ liệu", 500);
   }
 }
 
@@ -43,12 +62,18 @@ export async function POST(request: Request) {
     const db = getDb();
     const now = new Date().toISOString();
 
+    if (body.action === "replace-samples") {
+      await insertInitialDevices(db, now);
+      await db.update(devices).set({ archived: true, updatedAt: now }).where(inArray(devices.id, oldSampleIds));
+      return Response.json({ ok: true });
+    }
+
     if (body.action === "save-device") {
       const name = clean(body.name, 100);
       const code = clean(body.code, 40);
       const category = clean(body.category, 60) || "Khác";
-      const holder = clean(body.holder, 100) || "Kho thiết bị";
-      const condition = clean(body.condition, 30) || "Tốt";
+      const holder = clean(body.holder, 100) || "Chưa xác định";
+      const condition = clean(body.condition, 30) || "Chưa kiểm tra";
       const note = clean(body.note, 500);
       const quantity = Number(body.quantity);
       if (!name) return error("Vui lòng nhập tên thiết bị.");
@@ -95,7 +120,7 @@ export async function POST(request: Request) {
       return Response.json({ ok: true });
     }
     return error("Thao tác không hợp lệ.");
-  } catch (cause) {
-    return error(cause instanceof Error ? cause.message : "Không thể lưu dữ liệu", 500);
+  } catch {
+    return error("Không thể lưu dữ liệu", 500);
   }
 }
