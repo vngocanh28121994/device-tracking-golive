@@ -22,14 +22,13 @@ const initialDevices = [
 ];
 const oldSampleIds = ["sample-laptop", "sample-ipad", "sample-camera", "sample-headphone", "sample-projector", "sample-microphone"];
 
-const validConditions = ["Chưa kiểm tra", "Tốt", "Cần kiểm tra", "Hỏng"];
 const clean = (value: unknown, max = 200) => typeof value === "string" ? value.trim().slice(0, max) : "";
 const validDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
 const error = (message: string, status = 400) => Response.json({ error: message }, { status });
 async function insertInitialDevices(db: ReturnType<typeof getDb>, now: string) {
   for (let i = 0; i < initialDevices.length; i += 5) {
     await db.insert(devices).values(initialDevices.slice(i, i + 5).map((item) => ({
-      ...item, code: "", quantity: 1, holder: "Chưa xác định", condition: "Chưa kiểm tra", note: "", updatedAt: now,
+      ...item, code: "", quantity: 1, holder: "Chưa xác định", note: "", updatedAt: now,
     }))).onConflictDoNothing();
   }
 }
@@ -75,13 +74,11 @@ export async function POST(request: Request) {
       const code = clean(body.code, 40);
       const category = clean(body.category, 60) || "Khác";
       const holder = clean(body.holder, 100) || "Chưa xác định";
-      const condition = clean(body.condition, 30) || "Chưa kiểm tra";
       const note = clean(body.note, 500);
       if (!name) return error("Vui lòng nhập tên thiết bị.");
-      if (!validConditions.includes(condition)) return error("Tình trạng không hợp lệ.");
       const id = clean(body.id, 100) || crypto.randomUUID();
       const existing = await db.select({ id: devices.id }).from(devices).where(eq(devices.id, id)).limit(1);
-      const values = { name, code, category, holder, condition, note, quantity: 1, updatedAt: now };
+      const values = { name, code, category, holder, note, quantity: 1, updatedAt: now };
       if (existing.length) await db.update(devices).set(values).where(eq(devices.id, id));
       else await db.insert(devices).values({ id, ...values });
       return Response.json({ ok: true, id });
@@ -133,10 +130,9 @@ export async function POST(request: Request) {
       const checkedByEmail = user.email;
       const quantity = rows[0].quantity;
       const holder = rows[0].holder;
-      const condition = rows[0].condition;
       const note = rows[0].note;
-      await db.insert(dailyChecks).values({ date, deviceId, quantity, holder, condition, note, checkedBy, checkedByUserId, checkedByEmail, checkedAt: now })
-        .onConflictDoUpdate({ target: [dailyChecks.date, dailyChecks.deviceId], set: { quantity, holder, condition, note, checkedBy, checkedByUserId, checkedByEmail, checkedAt: now } });
+      await db.insert(dailyChecks).values({ date, deviceId, quantity, holder, note, checkedBy, checkedByUserId, checkedByEmail, checkedAt: now })
+        .onConflictDoUpdate({ target: [dailyChecks.date, dailyChecks.deviceId], set: { quantity, holder, note, checkedBy, checkedByUserId, checkedByEmail, checkedAt: now } });
       return Response.json({ ok: true });
     }
     return error("Thao tác không hợp lệ.");
