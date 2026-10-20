@@ -11,6 +11,6 @@ The Site MCP tools are owner-only:
 
 The daily cloud task calls the second tool once. The database claims `daily:YYYY-MM-DD` before sending, preventing concurrent or repeated deliveries. Do not retry an ambiguous delivery; inspect Teams and Workflow run history. Manual tests use separate request IDs and are labeled as tests.
 
-`TEAMS_SCHEDULE_READY=1` is a UI readiness indicator, set only after confirming the linked schedule. The schedule must retain the Site link and owner identity; service access without visitor identity cannot invoke owner-only tools.
+`TEAMS_SCHEDULE_READY=1` records that the linked schedule is saved and enabled. It does not prove a delivery ran. The schedule must retain the Site link and owner identity; service access without visitor identity cannot invoke owner-only tools.
 
 No real Teams webhook is included in source or test fixtures.

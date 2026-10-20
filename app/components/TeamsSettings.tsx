@@ -56,7 +56,7 @@ export function TeamsSettings() {
     <div className="teams-heading"><span>💬</span><div><span className="section-kicker">CHỈ CHỦ WEBSITE</span><h2>Báo cáo chốt máy qua Teams</h2></div></div>
     <p className="teams-copy">Hằng ngày lúc <strong>19:05 · giờ Việt Nam</strong>, gửi số máy đã chốt và các máy chưa chốt kèm người đang giữ. Nếu chốt đủ, báo cáo sẽ thông báo hoàn thành.</p>
     <div className={"teams-schedule-note " + (settings.scheduleReady ? "ready" : "")}>
-      {settings.scheduleReady ? "✓ Lịch gửi tự động đã sẵn sàng." : "Lịch tự động chưa được kích hoạt. Bạn có thể lưu webhook và gửi thử trước."}
+      {settings.scheduleReady ? "✓ Đã tạo lịch gửi hằng ngày lúc 19:05. Lưu webhook và bật báo cáo để sử dụng." : "Lịch tự động chưa được kích hoạt. Bạn có thể lưu webhook và gửi thử trước."}
     </div>
     <label className="teams-label" htmlFor="teams-target">TÊN NHÓM / KÊNH</label>
     <input id="teams-target" value={targetLabel} onChange={event => setTargetLabel(event.target.value)} maxLength={100} placeholder="Ví dụ: Team QA · Quản lý thiết bị" autoComplete="off" />
