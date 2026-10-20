@@ -30,3 +30,20 @@ export const userProfiles = sqliteTable("user_profiles", {
   displayName: text("display_name").notNull(),
   updatedAt: text("updated_at").notNull(),
 });
+
+export const teamsSettings = sqliteTable("teams_settings", {
+  id: text("id").primaryKey(),
+  encryptedWebhook: text("encrypted_webhook"),
+  targetLabel: text("target_label").notNull().default(""),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(false),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const teamsDeliveries = sqliteTable("teams_deliveries", {
+  id: text("id").primaryKey(),
+  reportDate: text("report_date").notNull(),
+  status: text("status").notNull(),
+  message: text("message").notNull().default(""),
+  createdAt: text("created_at").notNull(),
+  sentAt: text("sent_at"),
+});
