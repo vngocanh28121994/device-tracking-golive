@@ -3,11 +3,17 @@ import { getChatGPTUser } from "../../chatgpt-auth";
 import { getDb } from "../../../db";
 import { userProfiles } from "../../../db/schema";
 
-export async function GET() {
+export async function GET(request: Request) {
   const user = await getChatGPTUser();
   if (!user) return Response.json({ error: "Vui lòng đăng nhập để sử dụng trang." }, { status: 401 });
   try {
-    const [saved] = await getDb().select().from(userProfiles).where(eq(userProfiles.userId, user.userId)).limit(1);
+    const db = getDb();
+    if (new URL(request.url).searchParams.get("list") === "1") {
+      const accounts = await db.select({ userId: userProfiles.userId, email: userProfiles.email, displayName: userProfiles.displayName }).from(userProfiles);
+      accounts.sort((a, b) => a.displayName.localeCompare(b.displayName, "vi"));
+      return Response.json({ accounts }, { headers: { "Cache-Control": "private, no-store" } });
+    }
+    const [saved] = await db.select().from(userProfiles).where(eq(userProfiles.userId, user.userId)).limit(1);
     return Response.json({
       profile: {
         email: user.email,

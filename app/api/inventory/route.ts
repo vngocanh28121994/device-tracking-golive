@@ -99,7 +99,17 @@ export async function POST(request: Request) {
       if (!device) return error("Thiết bị không còn trong danh sách.", 404);
       const [profile] = await db.select().from(userProfiles).where(eq(userProfiles.userId, user.userId)).limit(1);
       if (!profile) return error("Hãy đặt tên hiển thị cho tài khoản trước khi thao tác.");
-      const holder = body.action === "confirm-hold" ? profile.displayName : clean(body.borrower, 100);
+      const borrowerUserId = clean(body.borrowerUserId, 100);
+      let holder = profile.displayName;
+      if (body.action === "lend-device") {
+        if (borrowerUserId) {
+          const [borrowerProfile] = await db.select({ displayName: userProfiles.displayName }).from(userProfiles).where(eq(userProfiles.userId, borrowerUserId)).limit(1);
+          if (!borrowerProfile) return error("Tài khoản người mượn không còn trong danh sách.");
+          holder = borrowerProfile.displayName;
+        } else {
+          holder = clean(body.borrower, 100);
+        }
+      }
       if (!holder) return error("Vui lòng nhập tên người hoặc team mượn.");
       await db.update(devices).set({ holder, updatedAt: now }).where(eq(devices.id, deviceId));
       return Response.json({ ok: true, holder });
