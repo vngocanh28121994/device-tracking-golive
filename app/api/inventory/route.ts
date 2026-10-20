@@ -48,7 +48,9 @@ export async function GET(request: Request) {
     const active = all.filter((item) => !item.archived);
     const activeIds = new Set(active.map((item) => item.id));
     const checks = validDate(date) ? (await db.select().from(dailyChecks).where(eq(dailyChecks.date, date))).filter((item) => activeIds.has(item.deviceId)) : [];
-    return Response.json({ devices: active, checks }, { headers: { "Cache-Control": "private, no-store" } });
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    const todayChecks = date === today ? checks : (await db.select({ deviceId: dailyChecks.deviceId }).from(dailyChecks).where(eq(dailyChecks.date, today))).filter((item) => activeIds.has(item.deviceId));
+    return Response.json({ devices: active, checks, todayCheckedIds: todayChecks.map((item) => item.deviceId) }, { headers: { "Cache-Control": "private, no-store" } });
   } catch {
     return error("Không thể tải dữ liệu", 500);
   }
