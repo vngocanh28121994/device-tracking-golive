@@ -72,11 +72,12 @@ export async function sendTeamsReport(testRequestId?: string) {
     const checks = await db.select({ deviceId: dailyChecks.deviceId }).from(dailyChecks).where(eq(dailyChecks.date, date));
     const report = buildTeamsReport(items, new Set(checks.map(check => check.deviceId)), date, test);
     const webhook = validateWebhook(await decrypt(settings.encryptedWebhook));
-    requestStarted = true;
-    const response = await fetch(webhook, {
+    const request = new Request(webhook, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(report.payload),
-      redirect: "error", signal: AbortSignal.timeout(15000),
+      redirect: "manual", signal: AbortSignal.timeout(15000),
     });
+    requestStarted = true;
+    const response = await fetch(request);
     if (!response.ok) throw new Error(`Teams từ chối yêu cầu (HTTP ${response.status}). Kiểm tra webhook và quyền của Workflow.`);
     const responseText = (await response.text()).trim();
     if (/^(Microsoft Teams endpoint returned HTTP error|0$)/i.test(responseText)) throw new Error("Teams báo lỗi khi nhận thông báo. Hãy kiểm tra Workflow.");
@@ -85,7 +86,7 @@ export async function sendTeamsReport(testRequestId?: string) {
     return { status: "sent", message };
   } catch (error) {
     const message = error instanceof Error && /^Teams /.test(error.message) ? error.message : requestStarted
-      ? "Chưa xác định được Teams đã nhận tin hay chưa. Kiểm tra Teams / lịch sử Workflow trước khi gửi lại."
+      ? `${error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError") ? "Hết thời gian chờ phản hồi từ Teams." : "Không nhận được phản hồi từ Teams."} Chưa xác định được tin đã được nhận hay chưa. Kiểm tra Teams / lịch sử Workflow trước khi gửi lại.`
       : "Không thể chuẩn bị báo cáo. Hãy kiểm tra cấu hình Teams.";
     await db.update(teamsDeliveries).set({ status: requestStarted && !message.startsWith("Teams ") ? "unknown" : "failed", message }).where(eq(teamsDeliveries.id, id));
     throw new Error(message);
