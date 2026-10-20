@@ -48,7 +48,7 @@ export async function GET(request: Request) {
     const active = all.filter((item) => !item.archived);
     const activeIds = new Set(active.map((item) => item.id));
     const checks = validDate(date) ? (await db.select().from(dailyChecks).where(eq(dailyChecks.date, date))).filter((item) => activeIds.has(item.deviceId)) : [];
-    return Response.json({ devices: active, checks });
+    return Response.json({ devices: active, checks }, { headers: { "Cache-Control": "private, no-store" } });
   } catch {
     return error("Không thể tải dữ liệu", 500);
   }
