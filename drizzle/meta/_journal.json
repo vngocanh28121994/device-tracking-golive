@@ -29,6 +29,13 @@
       "when": 1792482596088,
       "tag": "0003_optimal_the_renegades",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1792635789212,
+      "tag": "0004_eager_vapor",
+      "breakpoints": true
     }
   ]
 }

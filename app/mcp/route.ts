@@ -1,4 +1,3 @@
-import { isSiteOwner, readTeamsSettings, sendTeamsReport } from "../lib/teams-notifications";
 
 export async function POST(request: Request) {
   let id: unknown = null;
@@ -11,13 +10,12 @@ export async function POST(request: Request) {
     if (body.method?.startsWith("notifications/")) return new Response(null, { status: 204 });
     if (body.method === "ping") return result({});
     if (body.method === "tools/list") return result({ tools: [
-      { name: "get_teams_reporting_status", description: "Chủ website xem cấu hình và kết quả gửi báo cáo Teams. Không trả URL webhook.", inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true } },
-      { name: "send_daily_teams_report", description: "Chủ website gửi báo cáo chốt máy hôm nay đến Teams webhook đã lưu, chỉ từ 19:05 giờ Việt Nam khi cấu hình được bật. Mỗi ngày gửi tối đa một lần. Không gửi lại khi kết quả không rõ.", inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: false, idempotentHint: true } },
+      { name: "get_teams_reporting_status", description: "Chốt cuối ngày đã được gỡ. Chỉ trả trạng thái ngừng hoạt động, không có cấu hình webhook.", inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true } },
+      { name: "send_daily_teams_report", description: "Công cụ cũ đã ngừng hoạt động. Chỉ trả trạng thái bỏ qua, không gửi tin Teams.", inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true, idempotentHint: true } },
     ] });
     if (body.method === "tools/call") {
-      if (!await isSiteOwner()) return result({ isError: true, content: [{ type: "text", text: "Chỉ chủ website được sử dụng công cụ báo cáo Teams." }] });
-      const value = body.params?.name === "get_teams_reporting_status" ? await readTeamsSettings()
-        : body.params?.name === "send_daily_teams_report" ? await sendTeamsReport() : null;
+      const value = ["get_teams_reporting_status", "send_daily_teams_report"].includes(body.params?.name || "")
+        ? { status: "skipped", enabled: false, configured: false, featureRemoved: true, message: "Chốt cuối ngày và báo cáo Teams đã được gỡ. Không gửi thông báo." } : null;
       if (!value) throw new Error("Công cụ không tồn tại.");
       return result({ content: [{ type: "text", text: JSON.stringify(value) }], structuredContent: value });
     }

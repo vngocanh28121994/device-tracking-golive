@@ -1,7 +1,8 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { getChatGPTUser } from "../../chatgpt-auth";
 import { getDb } from "../../../db";
-import { dailyChecks, devices, userProfiles } from "../../../db/schema";
+import { deviceMovements, devices, userProfiles } from "../../../db/schema";
+import { recordHolderChange } from "../../lib/device-movements";
 
 const initialDevices = [
   { id: "ios-iphone-se", name: "iPhone SE", category: "iOS" },
@@ -23,7 +24,6 @@ const initialDevices = [
 const oldSampleIds = ["sample-laptop", "sample-ipad", "sample-camera", "sample-headphone", "sample-projector", "sample-microphone"];
 
 const clean = (value: unknown, max = 200) => typeof value === "string" ? value.trim().slice(0, max) : "";
-const validDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
 const error = (message: string, status = 400) => Response.json({ error: message }, { status });
 async function insertInitialDevices(db: ReturnType<typeof getDb>, now: string) {
   for (let i = 0; i < initialDevices.length; i += 5) {
@@ -33,7 +33,7 @@ async function insertInitialDevices(db: ReturnType<typeof getDb>, now: string) {
   }
 }
 
-export async function GET(request: Request) {
+export async function GET() {
   if (!await getChatGPTUser()) return error("Vui lòng đăng nhập để sử dụng trang.", 401);
   try {
     const db = getDb();
@@ -43,13 +43,8 @@ export async function GET(request: Request) {
       await insertInitialDevices(db, now);
       all = await db.select().from(devices);
     }
-    const date = new URL(request.url).searchParams.get("date") ?? "";
     const active = all.filter((item) => !item.archived);
-    const activeIds = new Set(active.map((item) => item.id));
-    const checks = validDate(date) ? (await db.select().from(dailyChecks).where(eq(dailyChecks.date, date))).filter((item) => activeIds.has(item.deviceId)) : [];
-    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-    const todayChecks = date === today ? checks : (await db.select({ deviceId: dailyChecks.deviceId }).from(dailyChecks).where(eq(dailyChecks.date, today))).filter((item) => activeIds.has(item.deviceId));
-    return Response.json({ devices: active, checks, todayCheckedIds: todayChecks.map((item) => item.deviceId) }, { headers: { "Cache-Control": "private, no-store" } });
+    return Response.json({ devices: active }, { headers: { "Cache-Control": "private, no-store" } });
   } catch {
     return error("Không thể tải dữ liệu", 500);
   }
@@ -79,8 +74,16 @@ export async function POST(request: Request) {
       const id = clean(body.id, 100) || crypto.randomUUID();
       const existing = await db.select({ id: devices.id }).from(devices).where(eq(devices.id, id)).limit(1);
       const values = { name, code, category, holder, note, quantity: 1, updatedAt: now };
-      if (existing.length) await db.update(devices).set(values).where(eq(devices.id, id));
-      else await db.insert(devices).values({ id, ...values });
+      const [profile] = await db.select().from(userProfiles).where(eq(userProfiles.userId, user.userId)).limit(1);
+      const actor = { userId: user.userId, name: profile?.displayName || user.displayName, email: user.email };
+      if (existing.length) await db.batch([
+        recordHolderChange(db, id, holder, "update-holder", actor, now),
+        db.update(devices).set(values).where(and(eq(devices.id, id), eq(devices.archived, false))),
+      ]);
+      else await db.batch([
+        db.insert(devices).values({ id, ...values }),
+        db.insert(deviceMovements).values({ deviceId: id, action: "created", fromHolder: null, toHolder: holder, actorUserId: actor.userId, actorName: actor.name, actorEmail: actor.email, createdAt: now }),
+      ]);
       return Response.json({ ok: true, id });
     }
 
@@ -110,31 +113,13 @@ export async function POST(request: Request) {
         }
       }
       if (!holder) return error("Vui lòng nhập tên người hoặc team mượn.");
-      await db.update(devices).set({ holder, updatedAt: now }).where(eq(devices.id, deviceId));
+      await db.batch([
+        recordHolderChange(db, deviceId, holder, body.action === "confirm-hold" ? "hold" : "lend", { userId: user.userId, name: profile.displayName, email: user.email }, now),
+        db.update(devices).set({ holder, updatedAt: now }).where(and(eq(devices.id, deviceId), eq(devices.archived, false))),
+      ]);
       return Response.json({ ok: true, holder });
     }
 
-    if (body.action === "save-check") {
-      const date = clean(body.date, 10);
-      const deviceId = clean(body.deviceId, 100);
-      if (!validDate(date)) return error("Ngày kiểm kê không hợp lệ.");
-      const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-      if (date !== today) return error("Chỉ có thể chốt kiểm kê cho ngày hôm nay.");
-      if (!deviceId) return error("Thiếu mã thiết bị.");
-      const rows = await db.select().from(devices).where(and(eq(devices.id, deviceId), eq(devices.archived, false))).limit(1);
-      if (!rows.length) return error("Thiết bị không còn trong danh sách.", 404);
-      const [profile] = await db.select().from(userProfiles).where(eq(userProfiles.userId, user.userId)).limit(1);
-      if (!profile) return error("Hãy đặt tên hiển thị cho tài khoản trước khi chốt kiểm kê.");
-      const checkedBy = profile.displayName;
-      const checkedByUserId = user.userId;
-      const checkedByEmail = user.email;
-      const quantity = rows[0].quantity;
-      const holder = rows[0].holder;
-      const note = rows[0].note;
-      await db.insert(dailyChecks).values({ date, deviceId, quantity, holder, note, checkedBy, checkedByUserId, checkedByEmail, checkedAt: now })
-        .onConflictDoUpdate({ target: [dailyChecks.date, dailyChecks.deviceId], set: { quantity, holder, note, checkedBy, checkedByUserId, checkedByEmail, checkedAt: now } });
-      return Response.json({ ok: true });
-    }
     return error("Thao tác không hợp lệ.");
   } catch {
     return error("Không thể lưu dữ liệu", 500);

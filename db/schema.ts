@@ -1,4 +1,4 @@
-import { integer, sqliteTable, text, primaryKey } from "drizzle-orm/sqlite-core";
+import { integer, sqliteTable, text, primaryKey, index } from "drizzle-orm/sqlite-core";
 
 export const devices = sqliteTable("devices", {
   id: text("id").primaryKey(),
@@ -30,6 +30,18 @@ export const userProfiles = sqliteTable("user_profiles", {
   displayName: text("display_name").notNull(),
   updatedAt: text("updated_at").notNull(),
 });
+
+export const deviceMovements = sqliteTable("device_movements", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  deviceId: text("device_id").notNull().references(() => devices.id),
+  action: text("action").notNull(),
+  fromHolder: text("from_holder"),
+  toHolder: text("to_holder").notNull(),
+  actorUserId: text("actor_user_id").notNull(),
+  actorName: text("actor_name").notNull(),
+  actorEmail: text("actor_email").notNull(),
+  createdAt: text("created_at").notNull(),
+}, table => [index("device_movements_device_id_id_idx").on(table.deviceId, table.id)]);
 
 export const teamsSettings = sqliteTable("teams_settings", {
   id: text("id").primaryKey(),
