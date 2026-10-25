@@ -5,7 +5,7 @@ The interface is a Vietnamese team tool for tracking individual devices and hand
 ## Shared visual rules
 
 - Tokens live in `app/globals.css`: warm canvas `#f8f7f4`, white surfaces, ink `#302840`, muted text `#72697f`, purple action `#7145bb`, lavender selection `#f1eafb`.
-- One sans family, with 13–14px controls/body, 12px supporting text, and 28–34px page headings. Avoid tiny or low-contrast labels.
+- One sans family, with 13–14px controls/body, 12px supporting text, and 23–28px page headings. Avoid tiny or low-contrast labels.
 - Use Lucide for interface icons. Preserve the existing Android and iPad device marks.
 - Use borders for panels and soft offset shadows only for overlays. Controls use 9–10px corners; panels use 14–16px.
 - Primary actions and selected navigation use purple. Android category uses a muted green label. Orange is reserved for the brand mark and the existing total-devices summary.
@@ -17,3 +17,10 @@ The interface is a Vietnamese team tool for tracking individual devices and hand
 History uses 20 records per page with newer/older navigation outside its scroll region, groups by Vietnam calendar day, and provides an optional date-range form. Never accumulate all pages in the DOM.
 
 Receive/lend confirmations use a short catch-the-device interaction. The basket always carries the resolved recipient name. Only a catch submits a handover; misses and cancellations leave records untouched. Include keyboard/touch controls and a static alignment mode for reduced motion.
+
+## Compact workspace refinement
+
+- The welcome area is a short title-and-action strip. On mobile, the three summaries remain in one row so the device list is visible immediately.
+- Holder initials and deterministic pastel colors come from `HolderIdentity`, shared by the inventory, holder summary, and device popup. The name remains readable next to the avatar.
+- Device dialogs place the icon beside the device name and use the same holder strip and left-back/right-primary footer layout.
+- The game gets a wider stage with fixed surrounding controls. Basket tilt acknowledges movement; a short confetti burst marks a catch, and a restrained wobble marks a miss. Reduced motion skips the decorative effects.

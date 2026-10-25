@@ -19,3 +19,5 @@ Pointer, touch, arrow keys, Home/End, and visible directional buttons control th
 Run the small collision check with `node --experimental-strip-types tests/handover-game.test.mjs`.
 
 In the animated mode the device follows a smooth horizontal path while falling. Its guide follows the same path, and the catch uses the current horizontal coordinate at rim contact. Static reduced-motion alignment is unchanged.
+
+The handover popup uses a larger responsive playfield with controls outside the arena. Movement tilts the basket slightly; a successful catch emits a short confetti burst before saving, and a miss wobbles the basket. Both OS and manually selected reduced-motion modes suppress decorative feedback.
