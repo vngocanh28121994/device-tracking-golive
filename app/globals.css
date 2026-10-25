@@ -352,8 +352,6 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 .handover-game h3 { display: flex; align-items: center; gap: 9px; font-size: 20px; font-weight: 600; margin: 0 0 8px; flex-shrink: 0; }
 .handover-game h3>svg { color: var(--accent); }
 .game-instructions { color: var(--muted); font-size: 12px; line-height: 1.65; margin: 0 0 14px; max-width: 65ch; flex-shrink: 0; }
-.game-motion-choice { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); margin: 0 0 14px; flex-shrink: 0; }
-.game-motion-choice input { width: 16px; height: 16px; accent-color: var(--accent); margin: 0; }
 .game-arena { position: relative; flex: 1; min-height: 180px; border-radius: 16px; background: #f3ecfc; overflow: hidden; touch-action: none; user-select: none; cursor: ew-resize; isolation: isolate; }
 .game-arena:after { content: ""; position: absolute; inset: auto 0 0; height: 18%; background: #f8eacb; z-index: -1; }
 .game-drop-guide { position: absolute; top: 12%; height: 66%; width: 1px; background: #d7c4e9; }

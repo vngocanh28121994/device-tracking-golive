@@ -90,7 +90,6 @@ export function HandoverGame({ recipient, deviceIcon, onComplete, onBack, errorM
   return <div className={"handover-game game-" + phase + (reduced ? " game-reduced" : "")}>
     <h3><Target size={20}/> Chuyền máy nào!</h3>
     <p className="game-instructions">Kéo rổ bằng chuột hoặc ngón tay. Bạn cũng có thể dùng phím ← → hoặc hai nút bên dưới.</p>
-    <label className="game-motion-choice"><input type="checkbox" checked={reduced} disabled={phase!=="ready"&&phase!=="miss"} onChange={event=>setReduced(event.target.checked)}/> Căn rổ không chuyển động</label>
     <div className="game-arena" ref={arena} role="slider" tabIndex={0} aria-label={"Di chuyển rổ của " + recipient} aria-valuemin={16} aria-valuemax={84} aria-valuenow={Math.round(basket)} aria-valuetext={"Rổ ở " + Math.round(basket) + (!reduced && phase !== "ready" ? "%. Thiết bị dùng quỹ đạo lượn ngang." : "%. Thiết bị ở " + Math.round(target) + "%.")} aria-disabled={locked || phase === "error"} onPointerDown={pointer} onPointerMove={pointer} onKeyDown={event => {
       if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) { event.preventDefault(); move(event.key === "Home" ? 16 : event.key === "End" ? 84 : basketPosition.current + (event.key === "ArrowLeft" ? -6 : 6)); }
     }}>
