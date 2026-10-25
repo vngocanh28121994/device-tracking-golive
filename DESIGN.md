@@ -6,7 +6,7 @@ The interface is a Vietnamese team tool for tracking individual devices and hand
 
 - Tokens live in `app/globals.css`: warm canvas `#f8f7f4`, white surfaces, ink `#302840`, muted text `#72697f`, purple action `#7145bb`, lavender selection `#f1eafb`.
 - One sans family, with 13–14px controls/body, 12px supporting text, and 23–28px page headings. Avoid tiny or low-contrast labels.
-- Use Lucide for interface icons. Preserve the existing Android and iPad device marks.
+- Use Lucide for interface icons. Android devices use compact brand marks: Samsung navy, Xiaomi/Redmi/Poco orange, Oppo green; unknown brands use the shared phone icon. Preserve the iPad mark.
 - Use borders for panels and soft offset shadows only for overlays. Controls use 9–10px corners; panels use 14–16px.
 - Primary actions and selected navigation use purple. Android category uses a muted green label. Orange is reserved for the brand mark and the existing total-devices summary.
 - Inventory actions always use a visible, labeled ellipsis button on desktop and mobile. Mobile rows retain device name, category, holder, and action.

@@ -21,10 +21,14 @@ const makeHolderOptions = (devices:Device[]) => {
  for(const item of devices)counts.set(item.holder,(counts.get(item.holder)||0)+1);
  return [{value:"__all__",label:"Tất cả người giữ",description:devices.length+" thiết bị"},...Array.from(counts,([holder,count])=>({value:holder,label:holder,description:count+" thiết bị"})).sort((a,b)=>(a.value==="Chưa xác định"?1:0)-(b.value==="Chưa xác định"?1:0)||a.label.localeCompare(b.label,"vi"))];
 };
-const AndroidIcon = () => <svg className="device-svg" viewBox="0 0 24 24" aria-label="Android"><path fill="#3DDC84" d="M17.6 9.48l1.84-3.18a.38.38 0 0 0-.14-.52.38.38 0 0 0-.52.14l-1.87 3.23A11.46 11.46 0 0 0 12 8.13c-1.75 0-3.4.38-4.9 1.02L5.22 5.92a.38.38 0 0 0-.52-.14.38.38 0 0 0-.14.52L6.4 9.48A10.78 10.78 0 0 0 1 18h22a10.78 10.78 0 0 0-5.4-8.52zM7 15.25a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5zm10 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5z"/></svg>;
+const AndroidBrandIcon = ({ name }: { name: string }) => {
+ const brand = /samsung/i.test(name) ? "samsung" : /xiaomi|redmi|poco/i.test(name) ? "xiaomi" : /oppo/i.test(name) ? "oppo" : "";
+ if (!brand) return <Smartphone className="device-svg" aria-label="Android"/>;
+ return <span className={"device-brand device-brand-" + brand} role="img" aria-label={brand === "xiaomi" ? "Xiaomi" : brand === "oppo" ? "Oppo" : "Samsung"}>{brand === "samsung" ? "SAMSUNG" : brand === "xiaomi" ? "mi" : "oppo"}</span>;
+};
 const TabletIcon = () => <svg className="device-svg" viewBox="0 0 24 24" aria-label="iPad"><rect x="3.5" y="1.5" width="17" height="21" rx="2.6" fill="#2b2733"/><rect x="5" y="3.2" width="14" height="17.6" rx="1.2" fill="#9fd3ff"/><path d="M5 14.5 19 7.5v5.5L5 20z" fill="#c4e4ff"/><circle cx="12" cy="2.35" r=".45" fill="#6b6575"/></svg>;
 const emoji = (category:string, name="") => {
- if(category==="Android") return <AndroidIcon/>;
+ if(category==="Android") return <AndroidBrandIcon name={name}/>;
  if(category==="Máy tính bảng" || /ipad/i.test(name)) return <TabletIcon/>;
  const Icon = ({iOS:Smartphone,Laptop, "Máy ảnh":Camera,"Âm thanh":Headphones,"Trình chiếu":Projector} as Record<string,typeof Smartphone>)[category] || Plug;
  return <Icon className="device-svg" aria-hidden="true"/>;
