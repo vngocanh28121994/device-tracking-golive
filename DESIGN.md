@@ -15,3 +15,5 @@ The interface is a Vietnamese team tool for tracking individual devices and hand
 - Do not bring back quantity, physical condition, or daily check-in controls. Device history records handovers and remains in each device's action menu.
 
 History uses 20 records per page with newer/older navigation outside its scroll region, groups by Vietnam calendar day, and provides an optional date-range form. Never accumulate all pages in the DOM.
+
+Receive/lend confirmations use a short catch-the-device interaction. The basket always carries the resolved recipient name. Only a catch submits a handover; misses and cancellations leave records untouched. Include keyboard/touch controls and a static alignment mode for reduced motion.

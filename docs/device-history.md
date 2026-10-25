@@ -9,3 +9,11 @@ The authenticated history endpoint returns up to 20 records per page, using the 
 Old daily check snapshots are not converted into handovers because they do not identify actual transfer times or actions.
 
 End-of-day checks and Teams reporting have been retired. Their old records are retained in existing tables. The old Teams API returns HTTP 410, and the former MCP report tools return a harmless skipped result without reading a webhook or sending any message.
+
+## Playful handovers
+
+Receive and lend confirmations enter a short catch-the-device game. The basket carries the resolved recipient name, including manually entered borrowers. A miss, retry, cancellation, or hidden in-progress game does not call the inventory mutation. Only a successful catch calls the existing handover API. The game is a UI interaction, not an authorization mechanism; server authentication and input validation still govern mutations.
+
+Pointer, touch, arrow keys, Home/End, and visible directional buttons control the basket. Reduced-motion users get a static alignment challenge with the same collision check; users may also select it manually. If saving fails after a catch, retry saving without repeating the game. Animation frames and pending celebrations stop when the component is closed.
+
+Run the small collision check with `node --experimental-strip-types tests/handover-game.test.mjs`.

@@ -340,3 +340,42 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
   .device-history { overflow: visible; flex-shrink: 0; }
   .device-history .history-scroll { flex: none; height: 180px; }
 }
+
+.handover-game h3 { display: flex; align-items: center; gap: 9px; font-size: 19px; margin: 0 0 9px; }
+.game-instructions { color: var(--muted); font-size: 12px; line-height: 1.65; margin: 0 0 16px; }
+.game-arena { position: relative; height: 250px; border-radius: 14px; background: #f3ecfc; overflow: hidden; touch-action: none; user-select: none; cursor: ew-resize; isolation: isolate; }
+.game-arena:after { content: ""; position: absolute; inset: auto 0 0; height: 18%; background: #e8dcf4; z-index: -1; }
+.game-drop-guide { position: absolute; top: 12%; height: 66%; width: 1px; background: #d7c4e9; }
+.game-device { position: absolute; top: 10%; display: grid; place-items: center; width: 40px; height: 40px; background: #fff; color: #78529c; border-radius: 11px; transform: translate3d(-50%,0,0); box-shadow: 0 5px 12px #6a46891a; z-index: 2; }
+.game-playing .game-device { will-change: transform; }
+.game-device .device-svg { width: 25px; height: 28px; }
+.game-basket { position: absolute; top: 74%; width: 28%; transform: translateX(-50%); text-align: center; color: #8d571b; }
+.game-basket>svg { display: block; width: 100%; height: 45px; color: #a56722; fill: #ffe0a0; }
+.game-basket>span { display: block; font-size: 11px; font-weight: 700; line-height: 1.3; color: #70451c; padding: 0 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.game-steering { display: flex; align-items: center; gap: 12px; margin: 12px 0 0; }
+.game-steering .outline-button { width: 44px; min-height: 42px; padding: 8px; }
+.game-steering>span { flex: 1; min-width: 0; color: var(--muted); font-size: 12px; text-align: center; overflow-wrap: anywhere; }
+.game-steering strong { color: var(--accent); }
+.game-status { font-size: 12px; line-height: 1.6; min-height: 38px; margin: 14px 0 0; color: #75568d; }
+.game-miss .game-status, .game-error .game-status { color: #a14831; }
+.game-miss .game-device { background: #fff0e8; color: #a14831; }
+.game-caught .game-device, .game-saving .game-device, .game-error .game-device { opacity: 0; }
+.game-caught .game-basket, .game-saving .game-basket, .game-error .game-basket { color: #2d7a5b; }
+.game-caught .game-basket>svg, .game-saving .game-basket>svg, .game-error .game-basket>svg { color: #368365; fill: #ccebdc; }
+.game-catch-badge { display: flex; align-items: center; gap: 6px; position: absolute; left: 50%; top: 35%; transform: translateX(-50%); color: #216545; background: #fff; border-radius: 30px; padding: 10px 16px; font-size: 13px; font-weight: 700; white-space: nowrap; animation: catch-pop 350ms cubic-bezier(.16,1,.3,1); }
+@keyframes catch-pop { from { transform: translateX(-50%) scale(.8); opacity: .4; } to { transform: translateX(-50%) scale(1); opacity: 1; } }
+.handover-game .modal-actions { margin-top: 14px; }
+@media(max-width:760px) {
+  .device-dialog:has(.handover-game) { padding: 20px; }
+  .device-dialog:has(.handover-game) .dialog-device-icon { display: none; }
+  .device-dialog:has(.handover-game) .modal-head { margin-bottom: 14px; }
+  .device-dialog:has(.handover-game) .device-dialog-current { margin-bottom: 16px; }
+  .game-arena { height: 230px; }
+  .game-basket>span { font-size: 10px; }
+}
+.device-dialog:has(.handover-game) .dialog-device-icon { display: none; }
+.device-dialog:has(.handover-game) .modal-head { margin-bottom: 14px; }
+.device-dialog:has(.handover-game) .device-dialog-current { margin-bottom: 16px; }
+@media(min-width:761px) { .game-arena { height: 220px; } }
+.game-motion-choice { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); margin: -4px 0 12px; }
+.game-motion-choice input { width: 16px; height: 16px; accent-color: var(--accent); margin: 0; }
