@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Quản lý thiết bị",
-  description: "Quản lý thiết bị, người đang giữ và xác nhận kiểm kê cuối ngày.",
+  description: "Quản lý từng thiết bị, người đang giữ và lịch sử bàn giao trong đội.",
   icons: { icon: "/favicon.svg" },
 };
 

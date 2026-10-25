@@ -1,0 +1,15 @@
+# Device Club UI
+
+The interface is a Vietnamese team tool for tracking individual devices and handovers. Keep the established warm background, lavender identity, and friendly tone. Prioritize legible inventory rows and obvious actions.
+
+## Shared visual rules
+
+- Tokens live in `app/globals.css`: warm canvas `#f8f7f4`, white surfaces, ink `#302840`, muted text `#72697f`, purple action `#7145bb`, lavender selection `#f1eafb`.
+- One sans family, with 13–14px controls/body, 12px supporting text, and 28–34px page headings. Avoid tiny or low-contrast labels.
+- Use Lucide for interface icons. Preserve the existing Android and iPad device marks.
+- Use borders for panels and soft offset shadows only for overlays. Controls use 9–10px corners; panels use 14–16px.
+- Primary actions and selected navigation use purple. Android category uses a muted green label. Orange is reserved for the brand mark and the existing total-devices summary.
+- Inventory actions always use a visible, labeled ellipsis button on desktop and mobile. Mobile rows retain device name, category, holder, and action.
+- Dropdowns use the shared `StyledSelect`; keep the borrower placeholder “Chọn user có sẵn”.
+- Popups isolate keyboard focus, support Escape, and restore focus on close. Inputs on mobile are 16px to avoid viewport zoom. Respect reduced motion.
+- Do not bring back quantity, physical condition, or daily check-in controls. Device history records handovers and remains in each device's action menu.

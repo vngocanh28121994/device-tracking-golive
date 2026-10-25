@@ -34,7 +34,7 @@ export function DeviceHistory({ deviceId, onBack }: { deviceId: string; onBack: 
         <div className="history-transfer">{entry.fromHolder !== null && <><span>{entry.fromHolder}</span><ArrowRight size={15} /></>}<b>{entry.toHolder}</b></div>
         <small>Thực hiện bởi <strong>{entry.actorName}</strong></small>
       </li>)}</ol>}
-      {!loading && !error && entries.length === 0 && <div className="history-empty">📖 Chưa có lượt bàn giao được ghi nhận.<p>Các lần nhận máy và cho mượn từ bây giờ sẽ xuất hiện ở đây.</p></div>}
+      {!loading && !error && entries.length === 0 && <div className="history-empty"><History size={28} aria-hidden="true"/>Chưa có lượt bàn giao được ghi nhận.<p>Các lần nhận máy và cho mượn từ bây giờ sẽ xuất hiện ở đây.</p></div>}
       {loading && <p className="history-loading" role="status">Đang tải lịch sử...</p>}
       {error && <div className="history-error" role="alert">{error}<button className="text-button" onClick={() => void load(entries.length ? nextCursor ?? undefined : undefined)}>Thử lại</button></div>}
       {!loading && !error && nextCursor !== null && <button className="outline-button history-more" onClick={() => void load(nextCursor)}>Xem thêm lịch sử</button>}
