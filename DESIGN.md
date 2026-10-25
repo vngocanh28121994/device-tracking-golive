@@ -20,7 +20,7 @@ Receive/lend confirmations use a short catch-the-device interaction. The basket 
 
 ## Compact workspace refinement
 
-- The welcome area is a short title-and-action strip. On mobile, the three summaries remain in one row so the device list is visible immediately.
-- Holder initials and deterministic pastel colors come from `HolderIdentity`, shared by the inventory, holder summary, and device popup. The name remains readable next to the avatar.
+- Open directly to Kho thiết bị. Navigation contains inventory and profile only; do not reintroduce an overview or repeated usage/unknown-holder statistics.
+- Holder initials and deterministic pastel colors come from `HolderIdentity`, shared by the inventory and device popup. The name remains readable next to the avatar.
 - Device dialogs place the icon beside the device name and use the same holder strip and left-back/right-primary footer layout.
 - The game gets a wider stage with fixed surrounding controls. Basket tilt acknowledges movement; a short confetti burst marks a catch, and a restrained wobble marks a miss. Reduced motion skips the decorative effects.
