@@ -17,3 +17,5 @@ Receive and lend confirmations enter a short catch-the-device game. The basket c
 Pointer, touch, arrow keys, Home/End, and visible directional buttons control the basket. Reduced-motion users get a static alignment challenge with the same collision check; users may also select it manually. If saving fails after a catch, retry saving without repeating the game. Animation frames and pending celebrations stop when the component is closed.
 
 Run the small collision check with `node --experimental-strip-types tests/handover-game.test.mjs`.
+
+In the animated mode the device follows a smooth horizontal path while falling. Its guide follows the same path, and the catch uses the current horizontal coordinate at rim contact. Static reduced-motion alignment is unchanged.

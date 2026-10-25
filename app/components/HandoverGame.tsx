@@ -1,7 +1,7 @@
 "use client";
 import { type PointerEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Check, RotateCcw, ShoppingBasket, Target } from "lucide-react";
-import { catchesDevice, clampBasket } from "../lib/handover-game";
+import { catchesDevice, clampBasket, movingDeviceX } from "../lib/handover-game";
 
 type Phase = "ready" | "playing" | "aiming" | "miss" | "caught" | "saving" | "error";
 export function HandoverGame({ recipient, deviceIcon, onComplete, onBack, errorMessage }: {
@@ -11,7 +11,7 @@ export function HandoverGame({ recipient, deviceIcon, onComplete, onBack, errorM
   const [basket, setBasket] = useState(50);
   const [target, setTarget] = useState(22);
   const [reduced, setReduced] = useState(false);
-  const arena = useRef<HTMLDivElement>(null), falling = useRef<HTMLDivElement>(null);
+  const arena = useRef<HTMLDivElement>(null), falling = useRef<HTMLDivElement>(null), guide = useRef<HTMLDivElement>(null);
   const basketPosition = useRef(50), frame = useRef(0), celebration = useRef<ReturnType<typeof setTimeout> | null>(null);
   const resolved = useRef(false), active = useRef(false), mounted = useRef(true), saving = useRef(false);
   const locked = phase === "caught" || phase === "saving";
@@ -55,8 +55,10 @@ export function HandoverGame({ recipient, deviceIcon, onComplete, onBack, errorM
   function start() {
     cancelAnimationFrame(frame.current); resolved.current = false;
     const deviceX = Math.random() < .5 ? 20 + Math.random() * 8 : 72 + Math.random() * 8;
+    const direction = Math.random() < .5 ? -1 : 1;
     setTarget(deviceX); setPhase(reduced ? "aiming" : "playing");
     if (falling.current) falling.current.style.transform = `translate3d(-50%,0,0) rotate(0deg)`;
+    if (guide.current) guide.current.style.transform = "translateX(0)";
     if (reduced) return;
     active.current = true;
     let last: number | null = null, elapsed = 0;
@@ -66,21 +68,26 @@ export function HandoverGame({ recipient, deviceIcon, onComplete, onBack, errorM
       if (last !== null) elapsed += Math.min(now - last, 50);
       last = now;
       const progress = Math.max(0, Math.min(1, (elapsed - 650) / 2500));
-      if (falling.current && arena.current) falling.current.style.transform = `translate3d(-50%,${progress * arena.current.clientHeight * .64}px,0) rotate(${Math.sin(progress * Math.PI) * 18}deg)`;
-      if (progress >= 1) finish(deviceX); else frame.current = requestAnimationFrame(tick);
+      const currentX = movingDeviceX(deviceX, elapsed, direction);
+      if (falling.current && arena.current) {
+        const horizontal = (currentX - deviceX) / 100 * arena.current.clientWidth;
+        falling.current.style.transform = `translate3d(calc(-50% + ${horizontal}px),${progress * arena.current.clientHeight * .64}px,0) rotate(${Math.sin(elapsed / 350) * 12}deg)`;
+        if (guide.current) guide.current.style.transform = `translateX(${horizontal}px)`;
+      }
+      if (progress >= 1) finish(currentX); else frame.current = requestAnimationFrame(tick);
     };
     frame.current = requestAnimationFrame(tick);
     arena.current?.focus();
   }
-  const status = phase === "miss" ? "Ôi, hụt rồi! Người giữ chưa thay đổi. Thử lại nhé." : phase === "caught" ? "Hứng trúng rồi! Chuẩn bị bàn giao…" : phase === "saving" ? "Đang lưu người giữ và lịch sử bàn giao…" : phase === "error" ? (errorMessage || "Chưa lưu được bàn giao. Hãy thử lưu lại.") : phase === "playing" ? "Máy đang rơi! Đưa rổ sang " + (target < 50 ? "trái" : "phải") + " để hứng." : phase === "aiming" ? "Căn rổ dưới thiết bị, rồi bấm Hứng máy." : "Hứng đúng rổ, bàn giao đúng người!";
+  const status = phase === "miss" ? "Ôi, hụt rồi! Người giữ chưa thay đổi. Thử lại nhé." : phase === "caught" ? "Hứng trúng rồi! Chuẩn bị bàn giao…" : phase === "saving" ? "Đang lưu người giữ và lịch sử bàn giao…" : phase === "error" ? (errorMessage || "Chưa lưu được bàn giao. Hãy thử lưu lại.") : phase === "playing" ? "Máy đang lượn ngang! Di chuyển rổ theo máy để hứng." : phase === "aiming" ? "Căn rổ dưới thiết bị, rồi bấm Hứng máy." : "Hứng đúng rổ, bàn giao đúng người!";
   return <div className={"handover-game game-" + phase}>
     <h3><Target size={20}/> Chuyền máy nào!</h3>
     <p className="game-instructions">Kéo rổ bằng chuột hoặc ngón tay. Bạn cũng có thể dùng phím ← → hoặc hai nút bên dưới.</p>
     <label className="game-motion-choice"><input type="checkbox" checked={reduced} disabled={phase!=="ready"&&phase!=="miss"} onChange={event=>setReduced(event.target.checked)}/> Căn rổ không chuyển động</label>
-    <div className="game-arena" ref={arena} role="slider" tabIndex={0} aria-label={"Di chuyển rổ của " + recipient} aria-valuemin={16} aria-valuemax={84} aria-valuenow={Math.round(basket)} aria-valuetext={"Rổ ở " + Math.round(basket) + "%. Thiết bị ở " + Math.round(target) + "%."} aria-disabled={locked || phase === "error"} onPointerDown={pointer} onPointerMove={pointer} onKeyDown={event => {
+    <div className="game-arena" ref={arena} role="slider" tabIndex={0} aria-label={"Di chuyển rổ của " + recipient} aria-valuemin={16} aria-valuemax={84} aria-valuenow={Math.round(basket)} aria-valuetext={"Rổ ở " + Math.round(basket) + (!reduced && phase !== "ready" ? "%. Thiết bị dùng quỹ đạo lượn ngang." : "%. Thiết bị ở " + Math.round(target) + "%.")} aria-disabled={locked || phase === "error"} onPointerDown={pointer} onPointerMove={pointer} onKeyDown={event => {
       if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) { event.preventDefault(); move(event.key === "Home" ? 16 : event.key === "End" ? 84 : basketPosition.current + (event.key === "ArrowLeft" ? -6 : 6)); }
     }}>
-      <div className="game-drop-guide" style={{ left: target + "%" }} aria-hidden="true"/>
+      <div ref={guide} className="game-drop-guide" style={{ left: target + "%" }} aria-hidden="true"/>
       <div ref={falling} className="game-device" style={{ left: target + "%" }} aria-hidden="true">{deviceIcon}</div>
       <div className="game-basket" style={{ left: basket + "%" }} aria-hidden="true"><svg viewBox="0 0 120 50" preserveAspectRatio="none"><path d="M5 8h110l-12 34H17Z" fill="currentColor" fillOpacity=".22" stroke="currentColor" strokeWidth="3" strokeLinejoin="round"/><path d="M4 8h112M31 10l5 30M60 10v30M89 10l-5 30M12 23h96" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/></svg><span title={recipient}>{recipient}</span></div>
       {(phase === "caught" || phase === "saving" || phase === "error") && <div className="game-catch-badge"><Check size={18}/> Hứng trúng!</div>}
