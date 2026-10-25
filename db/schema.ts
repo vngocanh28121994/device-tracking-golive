@@ -7,6 +7,7 @@ export const devices = sqliteTable("devices", {
   category: text("category").notNull().default("Khác"),
   quantity: integer("quantity").notNull().default(1),
   holder: text("holder").notNull().default("Kho thiết bị"),
+  holderUserId: text("holder_user_id"),
   note: text("note").notNull().default(""),
   archived: integer("archived", { mode: "boolean" }).notNull().default(false),
   updatedAt: text("updated_at").notNull(),
@@ -28,6 +29,7 @@ export const userProfiles = sqliteTable("user_profiles", {
   userId: text("user_id").primaryKey(),
   email: text("email").notNull(),
   displayName: text("display_name").notNull(),
+  avatarKey: text("avatar_key").notNull().default(""),
   updatedAt: text("updated_at").notNull(),
 });
 

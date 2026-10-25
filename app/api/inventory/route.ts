@@ -2,6 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { getChatGPTUser } from "../../chatgpt-auth";
 import { getDb } from "../../../db";
 import { deviceMovements, devices, userProfiles } from "../../../db/schema";
+import { avatarUrl } from "../../lib/avatar";
 import { recordHolderChange } from "../../lib/device-movements";
 
 const initialDevices = [
@@ -44,7 +45,15 @@ export async function GET() {
       all = await db.select().from(devices);
     }
     const active = all.filter((item) => !item.archived);
-    return Response.json({ devices: active }, { headers: { "Cache-Control": "private, no-store" } });
+    const profiles = await db.select({userId:userProfiles.userId,displayName:userProfiles.displayName,avatarKey:userProfiles.avatarKey}).from(userProfiles);
+    // Legacy holders have no account ID. Match only a unique name; explicit manual loans use "".
+    const resolved = active.map(item => {
+      if (item.holderUserId !== null) return item;
+      const matches = profiles.filter(person => person.displayName === item.holder);
+      return {...item,holderUserId:matches.length === 1 ? matches[0].userId : null};
+    });
+    const people = profiles.map(person => ({userId:person.userId,displayName:person.displayName,avatar:avatarUrl(person.avatarKey)}));
+    return Response.json({ devices: resolved, people }, { headers: { "Cache-Control": "private, no-store" } });
   } catch {
     return error("Không thể tải dữ liệu", 500);
   }
@@ -73,7 +82,7 @@ export async function POST(request: Request) {
       if (!name) return error("Vui lòng nhập tên thiết bị.");
       const id = clean(body.id, 100) || crypto.randomUUID();
       const existing = await db.select({ id: devices.id }).from(devices).where(eq(devices.id, id)).limit(1);
-      const values = { name, code, category, holder, note, quantity: 1, updatedAt: now };
+      const values = { name, code, category, holder, holderUserId: "", note, quantity: 1, updatedAt: now };
       const [profile] = await db.select().from(userProfiles).where(eq(userProfiles.userId, user.userId)).limit(1);
       const actor = { userId: user.userId, name: profile?.displayName || user.displayName, email: user.email };
       if (existing.length) await db.batch([
@@ -103,21 +112,24 @@ export async function POST(request: Request) {
       if (!profile) return error("Hãy đặt tên hiển thị cho tài khoản trước khi thao tác.");
       const borrowerUserId = clean(body.borrowerUserId, 100);
       let holder = profile.displayName;
+      let holderUserId = user.userId;
       if (body.action === "lend-device") {
         if (borrowerUserId) {
           const [borrowerProfile] = await db.select({ displayName: userProfiles.displayName }).from(userProfiles).where(eq(userProfiles.userId, borrowerUserId)).limit(1);
           if (!borrowerProfile) return error("Tài khoản người mượn không còn trong danh sách.");
           holder = borrowerProfile.displayName;
+          holderUserId = borrowerUserId;
         } else {
           holder = clean(body.borrower, 100);
+          holderUserId = "";
         }
       }
       if (!holder) return error("Vui lòng nhập tên người hoặc team mượn.");
       await db.batch([
         recordHolderChange(db, deviceId, holder, body.action === "confirm-hold" ? "hold" : "lend", { userId: user.userId, name: profile.displayName, email: user.email }, now),
-        db.update(devices).set({ holder, updatedAt: now }).where(and(eq(devices.id, deviceId), eq(devices.archived, false))),
+        db.update(devices).set({ holder, holderUserId, updatedAt: now }).where(and(eq(devices.id, deviceId), eq(devices.archived, false))),
       ]);
-      return Response.json({ ok: true, holder });
+      return Response.json({ ok: true, holder, holderUserId });
     }
 
     return error("Thao tác không hợp lệ.");
