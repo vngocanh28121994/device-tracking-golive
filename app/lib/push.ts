@@ -34,6 +34,11 @@ async function accessToken(account: ServiceAccount) {
   return access_token;
 }
 
+// Some env loaders turn the key's "\n" escapes into real newlines, which JSON rejects inside a string.
+function parseAccount(raw: string): ServiceAccount {
+  try { return JSON.parse(raw); } catch { return JSON.parse(raw.replace(/\r?\n/g, "\\n")); }
+}
+
 // Best effort: a failed push never fails the action that triggered it. Tokens FCM no longer knows are removed.
 // ponytail: one FCM request per token and at most 90 accounts per call; fine for one team, batch if it grows.
 export async function notifyUsers(db: Db, userIds: string[], message: PushMessage) {
@@ -41,7 +46,7 @@ export async function notifyUsers(db: Db, userIds: string[], message: PushMessag
   const ids = Array.from(new Set(userIds)).slice(0, 90);
   if (!raw || !ids.length) return;
   try {
-    const account = JSON.parse(raw) as ServiceAccount;
+    const account = parseAccount(raw);
     const rows = await db.select({ token: pushTokens.token }).from(pushTokens).where(inArray(pushTokens.userId, ids));
     if (!rows.length) return;
     const auth = await accessToken(account);
