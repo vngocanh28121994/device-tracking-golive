@@ -629,3 +629,21 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
   .golive-skipped .golive-skip-button, .golive-skip-actions .golive-skip-button { min-height: 44px; }
   .golive-skipped .golive-skip-button { padding: 8px 14px; flex: none; }
 }
+
+/* Shared confirm dialog */
+.confirm-dialog { position: fixed; margin: auto; border: 0; color: var(--ink); width: min(440px, calc(100vw - 32px)); }
+.confirm-dialog::backdrop { background: #28203470; }
+.confirm-dialog .modal-head { margin-bottom: 12px; }
+.confirm-head { display: flex; align-items: center; gap: 12px; }
+.confirm-head h2 { font-size: 19px; }
+.confirm-icon { display: grid; place-items: center; width: 38px; height: 38px; flex: none; border-radius: 12px; background: var(--lavender); color: var(--accent); }
+.confirm-danger .confirm-icon { background: #fdecec; color: #b42335; }
+.confirm-message { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
+.confirm-message strong { color: var(--ink); font-weight: 650; }
+.confirm-dialog .modal-actions { justify-content: flex-end; margin-top: 24px; }
+.danger-button { background: #b42335; }
+.danger-button:hover { background: #941b2b; }
+@media (max-width: 900px) {
+  .confirm-dialog .modal-actions { flex-direction: column-reverse; }
+  .confirm-dialog .modal-actions button { width: 100%; }
+}

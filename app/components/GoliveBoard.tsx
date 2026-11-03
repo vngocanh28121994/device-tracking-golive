@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, History, CheckCircle2,
 import { StyledSelect } from "./StyledSelect";
 import { HolderIdentity } from "./HolderIdentity";
 import { LoadingState } from "./LoadingState";
+import { useConfirm } from "./ConfirmDialog";
 import { ImportedTicket, normalizeName, releaseNameFromCsv, ticketsFromCsv } from "../lib/golive";
 import { ManualGoliveDialog } from "./ManualGoliveDialog";
 
@@ -34,6 +35,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
   const [keyFilter, setKeyFilter] = useState(""), [summaryFilter, setSummaryFilter] = useState(""), [testerFilter, setTesterFilter] = useState("__all__");
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 } | null>({ key: "assignee", dir: 1 });
   const fileInput = useRef<HTMLInputElement>(null);
+  const [confirm, confirmDialog] = useConfirm();
   const [creating, setCreating] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false), [actionsOpen, setActionsOpen] = useState(false);
 
@@ -101,12 +103,12 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
 
   // "tested": the tester finished on borrowed devices; "not-needed": the ticket needs no test.
   async function setSkipped(ticket: Ticket, skipped: boolean, kind: "tested" | "not-needed" = "not-needed") {
-    const question = !skipped
-      ? "Thu hồi đánh dấu cho “" + ticket.issueKey + "”? Ticket sẽ quay lại checklist thiết bị."
+    const ok = await confirm(!skipped
+      ? { title: "Thu hồi đánh dấu?", message: <>Ticket <strong>{ticket.issueKey}</strong> sẽ quay lại checklist thiết bị và tính Done theo các máy đã tích.</>, confirmLabel: "Thu hồi" }
       : kind === "tested"
-        ? "Xác nhận đã test xong “" + ticket.issueKey + "” (kể cả trên máy mượn)? Ticket sẽ chuyển sang Done dù chưa tích đủ máy."
-        : "Đánh dấu “" + ticket.issueKey + "” là không cần test? Ticket sẽ chuyển sang Done ngay.";
-    if (!window.confirm(question)) return;
+        ? { title: "Xác nhận đã test xong?", message: <>Ticket <strong>{ticket.issueKey}</strong> chuyển sang Done ngay, kể cả khi bạn test trên máy mượn và chưa tích đủ các máy đang cầm.</>, confirmLabel: "Đã test xong" }
+        : { title: "Đánh dấu không cần test?", message: <>Ticket <strong>{ticket.issueKey}</strong> chuyển sang Done ngay và checklist thiết bị được ẩn đi. Có thể thu hồi sau.</>, confirmLabel: "Không cần test" });
+    if (!ok) return;
     setBusy(true);
     try {
       const result = await post({ action: "skip-test", ticketId: ticket.id, skipped, kind });
@@ -119,7 +121,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
     const open = tickets.filter(item => !fullyTested(item));
     if (open.length) { setUnfinished(open); return; }
     const oldest = history.length >= MAX_HISTORY ? history[history.length - 1] : null;
-    if (oldest && !window.confirm("Lịch sử chỉ lưu " + MAX_HISTORY + " đợt golive gần nhất. Đợt cũ nhất “" + oldest.name + "” sẽ bị xoá. Tiếp tục?")) return;
+    if (oldest && !await confirm({ title: "Lịch sử golive đã đầy", message: <>Lịch sử chỉ lưu {MAX_HISTORY} đợt gần nhất. Đợt cũ nhất <strong>{oldest.name}</strong> sẽ bị xoá vĩnh viễn.</>, confirmLabel: "Hoàn thành và xoá đợt cũ", tone: "danger" })) return;
     setBusy(true);
     try {
       await post({ action: "complete-release", releaseId });
@@ -136,7 +138,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
 
   async function deleteRelease() {
     const release = releases.find(item => item.id === releaseId);
-    if (!release || !window.confirm((release.completedAt ? "Xoá bản lưu của đợt golive" : "Xoá đợt golive") + " “" + release.name + "” cùng " + tickets.length + (release.source === "manual" ? " checklist QE?" : " ticket?"))) return;
+    if (!release || !await confirm({ title: release.completedAt ? "Xoá bản lưu đợt golive?" : "Xoá đợt golive?", message: <>Đợt <strong>{release.name}</strong> cùng {tickets.length} {release.source === "manual" ? "checklist QE" : "ticket"} và toàn bộ dấu tích sẽ bị xoá vĩnh viễn. Không thể hoàn tác.</>, confirmLabel: "Xoá đợt golive", tone: "danger" })) return;
     setBusy(true);
     try { await post({ action: "delete-release", releaseId }); onToast("Đã xoá đợt golive."); resetFilters(); await load(); }
     catch (e) { onError(e instanceof Error ? e.message : "Không thể xoá."); } finally { setBusy(false); }
@@ -282,6 +284,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
         </tr>)}</tbody></table>{visible.length === 0 && <p className="empty">Không có {rowLabel} phù hợp.</p>}</div></section>
       </>}
       </>}
+    {confirmDialog}
     {unfinished && <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setUnfinished(null); }} onKeyDown={e => { if (e.key === "Escape") setUnfinished(null); }}><div className="modal golive-warning" role="alertdialog" aria-modal="true" aria-labelledby="golive-warning-title">
       <div className="modal-head"><div className="golive-warning-head"><AlertTriangle size={22} /><div><h2 id="golive-warning-title">Chưa thể hoàn thành đợt golive</h2><p>Còn {unfinished.length} {rowLabel} chưa Done. Người test cần tích đủ các thiết bị đang cầm.</p></div></div><button className="icon-button" onClick={() => setUnfinished(null)} aria-label="Đóng"><X size={21} /></button></div>
       <div className="golive-warning-list"><table><thead><tr>{!manual && <><th>MÃ</th><th>TÊN TICKET</th></>}<th>NGƯỜI TEST</th></tr></thead><tbody>{unfinished.map(item => <tr key={item.issueKey}>{!manual && <><td className="golive-key">{item.issueKey}</td><td>{item.summary}</td></>}<td>{item.assignee || <span className="muted">Chưa có người test</span>}</td></tr>)}</tbody></table></div>
