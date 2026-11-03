@@ -5,6 +5,7 @@ import { StyledSelect } from "./StyledSelect";
 import { HolderIdentity } from "./HolderIdentity";
 import { LoadingState } from "./LoadingState";
 import { useConfirm } from "./ConfirmDialog";
+import { readUrlParam, writeUrlParams } from "../lib/url-state";
 import { ImportedTicket, normalizeName, releaseNameFromCsv, ticketsFromCsv } from "../lib/golive";
 import { ManualGoliveDialog } from "./ManualGoliveDialog";
 
@@ -28,7 +29,7 @@ let lastData: GoliveData | null = null;
 export function GoliveBoard({ people, currentUserId, onError, onToast, onManageRoles }: { people: Person[]; currentUserId: string; onError: (message: string) => void; onToast: (message: string) => void; onManageRoles: () => void }) {
   const [releases, setReleases] = useState<Release[]>(lastData?.releases || []), [releaseId, setReleaseId] = useState(lastData?.releaseId || ""), [tickets, setTickets] = useState<Ticket[]>(lastData?.tickets || []);
   const [devicesByUser, setDevicesByUser] = useState<Record<string, HeldDevice[]>>(lastData?.devicesByUser || {}), [checks, setChecks] = useState<DeviceCheck[]>(lastData?.checks || []), [mineOnly, setMineOnly] = useState(false);
-  const [loading, setLoading] = useState(!lastData), [busy, setBusy] = useState(false), [view, setView] = useState<"active" | "history">("active");
+  const [loading, setLoading] = useState(!lastData), [busy, setBusy] = useState(false), [view, setView] = useState<"active" | "history">(() => readUrlParam("view") === "history" ? "history" : "active");
   const [unfinished, setUnfinished] = useState<Unfinished[] | null>(null);
   const [pending, setPending] = useState<{ fileName: string; tickets: ImportedTicket[] } | null>(null), [releaseName, setReleaseName] = useState("");
   const [query, setQuery] = useState(""), [statusFilter, setStatusFilter] = useState("__all__");
@@ -48,8 +49,22 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
       setReleases(data.releases || []); setReleaseId(data.releaseId || ""); setTickets(data.tickets || []); setDevicesByUser(data.devicesByUser || {}); setChecks(data.checks || []);
     } catch (e) { onError(e instanceof Error ? e.message : "Không thể tải danh sách golive."); } finally { setLoading(false); }
   }, [onError]);
-  // Reopen the release that was on screen; naming it also lets the server load it in parallel.
-  useEffect(() => { void load(lastData?.releaseId || ""); }, [load]);
+  // Reopen the release named in the URL, else the one last on screen; naming it lets the server load it in parallel.
+  useEffect(() => { void load(readUrlParam("release") || (readUrlParam("view") === "history" ? "" : lastData?.releaseId || "")); }, [load]);
+  // Mirror the open view and release into the URL; Back/Forward within this page restore them.
+  // The history list has no release open, even though the server reports the default running one.
+  const openedId = view === "history" && !releases.find(item => item.id === releaseId)?.completedAt ? "" : releaseId;
+  useEffect(() => { if (!loading) writeUrlParams({ view: view === "history" ? "history" : "", release: openedId }); }, [view, openedId, loading]);
+  useEffect(() => {
+    const fromUrl = () => {
+      if (readUrlParam("tab") !== "golive") return;
+      setView(readUrlParam("view") === "history" ? "history" : "active");
+      const id = readUrlParam("release");
+      if (id) void load(id); else setReleaseId("");
+    };
+    window.addEventListener("popstate", fromUrl);
+    return () => window.removeEventListener("popstate", fromUrl);
+  }, [load]);
   // Pick up handovers and ticks made elsewhere: once a minute, and when the tab comes back into view.
   const refreshState = useRef({ releaseId, busy });
   useEffect(() => { refreshState.current = { releaseId, busy }; }, [releaseId, busy]);
@@ -173,7 +188,8 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
     return Array.from(list.values());
   };
   // The tester or a Manager may mark a CSV ticket as not needing a test while the release is running.
-  const canSkip = (ticket: Ticket) => !manual && !current?.completedAt && (ticket.assigneeUserId === currentUserId || people.find(person => person.userId === currentUserId)?.role === "Manager");
+  // A ticket whose tester has no matching account can be marked by anyone signed in.
+  const canSkip = (ticket: Ticket) => !manual && !current?.completedAt && (!ticket.assigneeUserId || ticket.assigneeUserId === currentUserId || people.find(person => person.userId === currentUserId)?.role === "Manager");
   // "Đã test xong" keeps the checklist below the badge so the devices actually tested stay visible.
   const skipBadge = (ticket: Ticket) => <div className={"golive-skipped" + (ticket.skipKind === "tested" ? " golive-skipped-tested" : "")}><span className="golive-skipped-label"><strong>{ticket.skipKind === "tested" ? <><CheckCircle2 size={16} aria-hidden="true" /> Đã test xong</> : <><Ban size={16} aria-hidden="true" /> Không cần test</>}</strong>{ticket.skippedBy && <small>{ticket.skipKind === "tested" ? "Xác nhận" : "Đánh dấu"} bởi {ticket.skippedBy}</small>}</span>{canSkip(ticket) && <button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => void setSkipped(ticket, false)}><Undo2 size={14} /> Thu hồi</button>}</div>;
   const isChecked = (ticket: Ticket, deviceId: string) => checks.some(item => item.ticketId === ticket.id && item.deviceId === deviceId);

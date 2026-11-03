@@ -184,7 +184,8 @@ export async function POST(request: Request) {
       const { ticket, completedAt } = found;
       const me = profiles.find(item => item.userId === user.userId);
       const tester = ticket.assigneeUserId ?? (ticket.assignee ? matchAccount(profiles, ticket.assignee) : null);
-      if (tester !== user.userId && me?.role !== "Manager") return error("Chỉ người test của ticket hoặc Manager mới được đánh dấu ticket.", 403);
+      // A tester without an account (or an outside helper) cannot act, so anyone signed in may mark that ticket.
+      if (tester && tester !== user.userId && me?.role !== "Manager") return error("Chỉ người test của ticket hoặc Manager mới được đánh dấu ticket.", 403);
       if (completedAt) return error("Đợt golive đã hoàn thành, không thể sửa.", 409);
       const by = me?.displayName || user.displayName || user.email;
       // Undoing clears Done too; the next load marks it Done again if every device is already ticked.

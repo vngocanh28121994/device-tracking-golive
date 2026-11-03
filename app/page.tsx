@@ -1,5 +1,6 @@
 "use client";
 import { LoadingState } from "./components/LoadingState";
+import { readUrlParam, writeUrlParams } from "./lib/url-state";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, CalendarDays, Check, History, Laptop, Menu, MoreHorizontal, Plus, Search, X, UserRound, Zap, Hand, Handshake, Smartphone, Camera, Headphones, Projector, Plug, Rocket } from "lucide-react";
 import { StyledSelect } from "./components/StyledSelect";
@@ -38,7 +39,9 @@ const emoji = (category:string, name="") => {
 };
 
 export default function Home(){
- const [page,setPage]=useState<"inventory"|"golive"|"profile">("inventory");
+ const [page,setPageState]=useState<"inventory"|"golive"|"profile">("inventory");
+ // Moving to another screen records it in ?tab= (a new history entry), so a reload stays put.
+ const setPage=useCallback((next:"inventory"|"golive"|"profile")=>{setPageState(next);if(readUrlParam("tab")!==(next==="inventory"?"":next))writeUrlParams({tab:next==="inventory"?"":next,...(next==="golive"?{}:{view:"",release:""})},true)},[]);
  const [people,setPeople]=useState<Person[]>([]),[avatarDraft,setAvatarDraft]=useState(""),[avatarProcessing,setAvatarProcessing]=useState(false);
  const [items,setItems]=useState<Device[]>([]);
  const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false);
@@ -87,6 +90,13 @@ export default function Home(){
  },[selectedDevice,modal,busy]);
  const latestLoad=useRef(0);
  const load=useCallback(async()=>{const request=++latestLoad.current;try{const r=await fetch("/api/inventory",{cache:"no-store"});const data=await r.json() as {devices:Device[];people?:Person[];error?:string};if(!r.ok)throw new Error(data.error||"Không thể tải dữ liệu.");if(request!==latestLoad.current)return;setItems(data.devices);setPeople(data.people||[]);setError("")}catch(e){if(request===latestLoad.current)setError(e instanceof Error?e.message:"Không thể tải dữ liệu.")}finally{if(request===latestLoad.current)setLoading(false)}},[]);
+ // Restore the screen from ?tab= on load and on Back/Forward.
+ useEffect(()=>{
+  const fromUrl=()=>{const tab=readUrlParam("tab");setPageState(tab==="golive"||tab==="profile"?tab:"inventory")};
+  fromUrl();
+  window.addEventListener("popstate",fromUrl);
+  return()=>window.removeEventListener("popstate",fromUrl);
+ },[]);
  // The golive page has its own data; people from the first inventory load are enough there.
  useEffect(()=>{if(page!=="golive")void load()},[page,load]);
  useEffect(()=>{const refresh=()=>{if(document.visibilityState==="visible")void load()};document.addEventListener("visibilitychange",refresh);return()=>document.removeEventListener("visibilitychange",refresh)},[load]);
