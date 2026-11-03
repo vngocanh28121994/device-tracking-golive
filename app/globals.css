@@ -414,18 +414,25 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 .muted { color: var(--muted); }
 .golive-mine { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted); cursor: pointer; }
 .golive-mine input { accent-color: var(--accent); width: 16px; height: 16px; }
-.golive-devices { min-width: 220px; }
+.golive-devices { min-width: 260px; }
 .golive-devices .muted { font-size: 12px; }
+.golive-device-group { min-width: 220px; max-width: 320px; text-align: left; }
+.golive-device-count { margin-bottom: 7px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .golive-checklist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.golive-checklist label { position: relative; display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+.golive-checklist label { position: relative; display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); font-size: 13px; cursor: pointer; text-align: left; }
+.golive-checklist label:not(.readonly):hover { border-color: var(--accent); background: var(--lavender); }
 .golive-checklist label.readonly { cursor: default; }
-.golive-checklist label.checked { color: #28715d; }
-.golive-checklist input { position: absolute; opacity: 0; width: 18px; height: 18px; margin: 0; cursor: inherit; }
+.golive-checklist label.checked { color: #24634f; background: #edf7f1; border-color: #c2dece; }
+.golive-checklist input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: inherit; }
+.golive-device-icon { flex: 0 0 auto; color: var(--muted); }
+.golive-checklist .checked .golive-device-icon { color: #28715d; }
+.golive-device-copy { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.golive-device-name { font-weight: 600; overflow-wrap: anywhere; line-height: 1.35; }
 .golive-check-box { flex: 0 0 18px; height: 18px; border: 1.5px solid #cbbfdb; border-radius: 5px; display: grid; place-items: center; background: var(--surface); color: #fff; }
 .golive-checklist label.checked .golive-check-box { background: #2f8a6f; border-color: #2f8a6f; }
-.golive-checklist label.readonly .golive-check-box { border-style: dashed; }
-.golive-checklist input:focus-visible + .golive-check-box { outline: 2px solid var(--accent); outline-offset: 2px; }
-.golive-checklist small { font-size: 11px; color: var(--muted); }
+.golive-checklist label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.golive-checklist small { font-size: 12px; color: var(--muted); line-height: 1.35; }
+.golive-checklist .checked small { color: #326c57; }
 .golive-table tr:has(.golive-checklist.complete) { background: #f6fbf8; }
 .golive-table .golive-assignee { min-width: 180px; }
 .golive-table td:nth-child(4) { min-width: 150px; }
@@ -485,6 +492,3 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 .golive-history-main small { font-size: 12px; color: var(--muted); }
 .golive-history-count { font-size: 13px; color: var(--muted); white-space: nowrap; }
 .golive-checklist small.golive-warn { color: #a3333d; font-weight: 600; }
-.golive-checklist label { flex-wrap: wrap; row-gap: 2px; }
-.golive-checklist label small { flex-basis: 100%; padding-left: 26px; }
-.golive-devices { min-width: 240px; }

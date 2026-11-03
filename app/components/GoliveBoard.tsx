@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, History, CheckCircle2, ArrowUp, ArrowUpDown, Check, FileUp, Rocket, Search, Trash2, X } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, History, CheckCircle2, ArrowUp, ArrowUpDown, Check, FileUp, Laptop, Rocket, Search, Smartphone, Tablet, Trash2, X } from "lucide-react";
 import { StyledSelect } from "./StyledSelect";
 import { HolderIdentity } from "./HolderIdentity";
 import { ImportedTicket, normalizeName, ticketsFromCsv } from "../lib/golive";
@@ -217,9 +217,20 @@ export function GoliveBoard({ people, currentUserId, onError, onToast }: { peopl
           <td className="golive-devices">{!ticket.assignee ? <span className="muted">Chưa có người test</span> : !ticket.assigneeUserId ? <span className="muted">“{ticket.assignee}” chưa khớp tài khoản nào</span> : (() => {
             const list = ticketDevices(ticket), mine = ticket.assigneeUserId === currentUserId && !current?.completedAt;
             if (list.length === 0) return <span className="muted">Người test chưa cầm thiết bị nào</span>;
-            return <ul className={"golive-checklist " + (fullyTested(ticket) ? "complete" : "")}>{list.map(device => { const checked = isChecked(ticket, device.id); return <li key={device.id}><label className={(checked ? "checked " : "") + (mine ? "" : "readonly")} title={mine ? "" : current?.completedAt ? "Đợt golive đã hoàn thành" : "Chỉ " + ticket.assignee + " mới tích được"}>
-              <input type="checkbox" checked={checked} disabled={!mine} onChange={e => void toggleCheck(ticket, device, e.target.checked)} />
-              <span className="golive-check-box" aria-hidden="true">{checked && <Check size={13} strokeWidth={3} />}</span>{device.name}{device.handedOver && <small className={checked ? "" : "golive-warn"}>{checked ? "đã bàn giao" : "đã bàn giao – chưa test"}</small>}{device.optional && !checked && <small>máy mới · không bắt buộc</small>}</label></li>; })}</ul>;
+            return <div className="golive-device-group">
+              <div className="golive-device-count">{list.filter(device => isChecked(ticket, device.id)).length}/{list.length} thiết bị đã test</div>
+              <ul className={"golive-checklist " + (fullyTested(ticket) ? "complete" : "")}>{list.map(device => {
+                const checked = isChecked(ticket, device.id);
+                const DeviceIcon = /ipad|tablet|máy tính bảng/i.test(device.name) ? Tablet : /laptop|macbook/i.test(device.name) ? Laptop : Smartphone;
+                const detail = device.handedOver ? (checked ? "Đã test · đã bàn giao" : "Đã bàn giao · chưa test") : device.optional && !checked ? "Máy mới · không bắt buộc" : checked ? "Đã test" : "Chưa test";
+                return <li key={device.id}><label className={(checked ? "checked " : "") + (mine ? "" : "readonly")} title={mine ? "" : current?.completedAt ? "Đợt golive đã hoàn thành" : "Chỉ " + ticket.assignee + " mới tích được"}>
+                  <input type="checkbox" aria-label={ticket.issueKey + " · " + device.name} checked={checked} disabled={!mine} onChange={e => void toggleCheck(ticket, device, e.target.checked)} />
+                  <DeviceIcon className="golive-device-icon" size={19} aria-hidden="true" />
+                  <span className="golive-device-copy"><span className="golive-device-name">{device.name}</span><small className={device.handedOver && !checked ? "golive-warn" : ""}>{detail}</small></span>
+                  <span className="golive-check-box" aria-hidden="true">{checked && <Check size={13} strokeWidth={3} />}</span>
+                </label></li>;
+              })}</ul>
+            </div>;
           })()}</td>
         </tr>)}</tbody></table>{visible.length === 0 && <p className="empty">Không có ticket phù hợp.</p>}</div></section>
       </>}
