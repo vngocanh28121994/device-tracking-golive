@@ -95,6 +95,9 @@ export const goliveTickets = sqliteTable("golive_tickets", {
   skippedBy: text("skipped_by"),
   // "not-needed", or "tested" when the tester finished on devices they did not hold.
   skipKind: text("skip_kind").notNull().default("not-needed"),
+  // "Không test được": why, and whether the owning scrum team has been told.
+  skipReason: text("skip_reason").notNull().default(""),
+  skipNotified: integer("skip_notified", { mode: "boolean" }).notNull().default(false),
 }, table => [index("golive_tickets_release_id_idx").on(table.releaseId)]);
 
 export const goliveDeviceChecks = sqliteTable("golive_device_checks", {
@@ -111,3 +114,25 @@ export const goliveTicketDevices = sqliteTable("golive_ticket_devices", {
   deviceId: text("device_id").notNull().references(() => devices.id),
   deviceName: text("device_name").notNull(),
 }, table => [primaryKey({ columns: [table.ticketId, table.deviceId] })]);
+
+// Web phase sign-off: each QE confirms they finished testing the web build of a release.
+export const goliveWebSignoffs = sqliteTable("golive_web_signoffs", {
+  releaseId: text("release_id").notNull(),
+  userId: text("user_id").notNull(),
+  signedAt: text("signed_at").notNull(),
+}, table => [primaryKey({ columns: [table.releaseId, table.userId] })]);
+
+// Firebase Cloud Messaging tokens, one per browser that turned on notifications.
+export const pushTokens = sqliteTable("push_tokens", {
+  token: text("token").primaryKey(),
+  userId: text("user_id").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, table => [index("push_tokens_user_id_idx").on(table.userId)]);
+
+// Admin switch per push notification type (keys in app/lib/push-events.ts). No row = on.
+export const pushSettings = sqliteTable("push_settings", {
+  event: text("event").primaryKey(),
+  enabled: integer("enabled", { mode: "boolean" }).notNull(),
+  updatedBy: text("updated_by").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});

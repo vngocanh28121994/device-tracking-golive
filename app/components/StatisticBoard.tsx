@@ -21,6 +21,7 @@ const statusClass = (done: boolean) => "status-chip " + (done ? "status-done" : 
 const BAR_PARTS = [
   { kind: "onDevices", short: "trên thiết bị", label: "ticket test đủ trên thiết bị đang cầm" },
   { kind: "confirmed", short: "đã test xong", label: "ticket người test xác nhận đã test xong" },
+  { kind: "cannotTest", short: "không test được", label: "ticket được đánh dấu không test được" },
   { kind: "notNeeded", short: "không cần test", label: "ticket được đánh dấu không cần test" },
   { kind: "open", short: "chưa test", label: "ticket chưa test" },
 ] as const;
