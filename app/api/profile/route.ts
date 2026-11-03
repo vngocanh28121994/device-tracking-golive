@@ -19,7 +19,7 @@ export async function GET(request: Request) {
       return json({ accounts, canManageRoles: canManageAccountRoles(rows.find(row => row.userId === user.userId)?.role, user.email) });
     }
     const [saved] = await db.select().from(userProfiles).where(eq(userProfiles.userId, user.userId)).limit(1);
-    return json({ profile: { userId: user.userId, email: user.email, displayName: saved?.displayName ?? "", suggestedName: user.fullName ?? "", configured: Boolean(saved), avatar: avatarUrl(saved?.avatarKey || "") } });
+    return json({ profile: { userId: user.userId, email: user.email, displayName: saved?.displayName ?? "", suggestedName: user.fullName ?? "", configured: Boolean(saved), role: saved?.role || "", avatar: avatarUrl(saved?.avatarKey || "") } });
   } catch { return json({ error: "Không thể tải hồ sơ." }, 500); }
 }
 
@@ -72,7 +72,7 @@ export async function POST(request: Request) {
         .onConflictDoUpdate({ target: userProfiles.userId, set: { email: user.email, displayName, avatarKey, updatedAt } }),
     ]);
     if (saved?.avatarKey && saved.avatarKey !== avatarKey) await env.BUCKET?.delete("avatars/" + saved.avatarKey).catch(() => {});
-    return json({ profile: { userId: user.userId, email: user.email, displayName, configured: true, avatar: avatarUrl(avatarKey) } });
+    return json({ profile: { userId: user.userId, email: user.email, displayName, configured: true, role: saved?.role || "", avatar: avatarUrl(avatarKey) } });
   } catch {
     if (createdKey) await env.BUCKET?.delete("avatars/" + createdKey).catch(() => {});
     return json({ error: "Không thể lưu hồ sơ. Vui lòng thử lại." }, 500);

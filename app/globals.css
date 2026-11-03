@@ -355,13 +355,17 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 
 .game-reduced .game-basket>svg, .game-reduced .game-catch-badge { animation: none; transition: none; }
 
-.user-avatar { position: relative; overflow: hidden; }
-.user-avatar>img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
+.user-avatar { position: relative; overflow: visible; }
+.user-avatar-face { position: relative; display: grid; place-items: center; width: 100%; height: 100%; overflow: hidden; border-radius: inherit; background: inherit; color: inherit; }
+.user-avatar-face > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
+.user-avatar:has(.user-avatar-role) { margin-inline-end: 8px; margin-block: 4px; }
+.user-avatar-role { position: absolute; right: -6px; bottom: -5px; z-index: 1; padding: 0 3px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); color: var(--accent); font-size: 10px; font-weight: 700; line-height: 14px; letter-spacing: 0; white-space: nowrap; }
+.styled-select-trigger > .user-avatar:first-child { overflow: visible; }
 .top-avatar { padding: 0; }
 .top-avatar-image { width: 100%; height: 100%; border-radius: 50%; display: grid; place-items: center; }
+.top-avatar-image:has(.user-avatar-role) { margin: 0; }
 .avatar-editor { display: flex; align-items: center; gap: 22px; margin: 0 0 28px; padding-bottom: 26px; border-bottom: 1px solid var(--line); }
-.avatar-editor-preview { display: grid; place-items: center; flex: none; width: 96px; height: 96px; border-radius: 50%; overflow: hidden; background: var(--lavender); color: var(--accent); font-size: 32px; font-weight: 600; }
-.avatar-editor-preview>img { width: 100%; height: 100%; object-fit: cover; }
+.avatar-editor-preview { display: grid; place-items: center; flex: none; width: 96px; height: 96px; border-radius: 50%; background: var(--lavender); color: var(--accent); font-size: 32px; font-weight: 600; }
 .avatar-editor-copy { min-width: 0; }
 .avatar-editor-copy>strong { font-size: 14px; font-weight: 600; }
 .avatar-editor-copy>p { color: var(--muted); font-size: 12px; line-height: 1.65; margin: 6px 0 12px; }
@@ -370,7 +374,7 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 .avatar-editor-actions .text-button { padding-left: 0; }
 .avatar-editor-copy>small { display: block; color: var(--muted); font-size: 11px; margin-top: 10px; }
 .avatar-editor-copy>.avatar-error { color: #a1432d; margin-bottom: 0; }
-.select-avatar { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; flex: none; }
+.select-avatar { width: 26px; height: 26px; border-radius: 50%; background: var(--lavender); color: var(--accent); font-size: 10px; font-weight: 650; flex: none; }
 .styled-select-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .styled-select-item-copy { flex: 1; }
 @media(max-width:900px) {

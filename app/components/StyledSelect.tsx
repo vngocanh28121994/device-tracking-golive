@@ -2,8 +2,9 @@
 
 import { Select } from "@base-ui/react/select";
 import { Check, ChevronDown } from "lucide-react";
+import { UserAvatar } from "./HolderIdentity";
 
-export type SelectOption = { value: string; label: string; description?: string; avatar?: string };
+export type SelectOption = { value: string; label: string; description?: string; avatar?: string; role?: string };
 
 type Props = {
   value: string;
@@ -23,7 +24,7 @@ export function StyledSelect({ value, onChange, options, placeholder, ariaLabel,
     disabled={disabled}
   >
     <Select.Trigger className="styled-select-trigger" aria-label={ariaLabel}>
-      {selected?.avatar && <img className="select-avatar" src={selected.avatar} alt=""/>}
+      {selected && (selected.avatar || selected.role) && <UserAvatar className="select-avatar" name={selected.label} src={selected.avatar} role={selected.role} />}
       <span className="styled-select-value"><Select.Value placeholder={<span className="styled-select-placeholder">{placeholder}</span>} /></span>
       <Select.Icon className="styled-select-icon"><ChevronDown size={16} /></Select.Icon>
     </Select.Trigger>
@@ -32,7 +33,7 @@ export function StyledSelect({ value, onChange, options, placeholder, ariaLabel,
         <Select.Popup className="styled-select-popup">
           <Select.List className="styled-select-list">
             {options.map(option => <Select.Item className="styled-select-item" key={option.value} value={option.value} label={option.label}>
-              {option.avatar && <img className="select-avatar" src={option.avatar} alt=""/>}
+              {(option.avatar || option.role) && <UserAvatar className="select-avatar" name={option.label} src={option.avatar} role={option.role} />}
               <span className="styled-select-item-copy"><Select.ItemText>{option.label}</Select.ItemText>{option.description && <small>{option.description}</small>}</span>
               <Select.ItemIndicator className="styled-select-check"><Check size={16} /></Select.ItemIndicator>
             </Select.Item>)}

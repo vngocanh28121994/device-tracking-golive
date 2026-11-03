@@ -22,6 +22,7 @@ Receive/lend confirmations use a short catch-the-device interaction. The basket 
 
 - Open directly to Kho thiết bị. Navigation contains inventory, Tracking Golive and profile; do not reintroduce an overview or repeated usage/unknown-holder statistics.
 - Holder initials and deterministic pastel colors come from `HolderIdentity`, shared by the inventory and device popup. The name remains readable next to the avatar.
+- Account avatars use `UserAvatar`, including profile previews and account selectors. Show an assigned work role in a small label at the lower-right of the avatar; keep its image clipped separately so the role stays visible. Unassigned accounts and manual holders have no role label.
 - Device dialogs place the icon beside the device name and use the same holder strip and left-back/right-primary footer layout.
 - The game gets a wider stage with fixed surrounding controls. Basket tilt acknowledges movement; a short confetti burst marks a catch, and a restrained wobble marks a miss. Reduced motion skips the decorative effects.
 

@@ -7,7 +7,7 @@ import { StyledSelect } from "./StyledSelect";
 export type RoleAccount = { userId: string; displayName: string; email: string; avatar: string; role: string };
 export type RoleAccountList = { accounts: RoleAccount[]; canManageRoles: boolean; error?: string };
 
-export function AccountRoles() {
+export function AccountRoles({ onRoleChange }: { onRoleChange?: (userId: string, role: string) => void }) {
   const [accounts, setAccounts] = useState<RoleAccount[]>([]);
   const [canManage, setCanManage] = useState(false), [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(""), [error, setError] = useState(""), [message, setMessage] = useState("");
@@ -28,6 +28,7 @@ export function AccountRoles() {
       const response = await fetch("/api/profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "assign-role", userId: account.userId, role }) });
       const data = await response.json() as { error?: string };
       if (!response.ok) throw new Error(data.error || "Không thể lưu role.");
+      onRoleChange?.(account.userId, role);
       const fresh = await fetch("/api/profile?list=1", { cache: "no-store" });
       const updated = await fresh.json() as RoleAccountList;
       if (!fresh.ok) throw new Error("Đã lưu role. Hãy tải lại trang để cập nhật danh sách.");
@@ -44,7 +45,7 @@ export function AccountRoles() {
     {error && <p className="role-error" role="alert">{error}</p>}
     <p className="role-feedback" role="status">{message}</p>
     <ul className="account-role-list">{accounts.map(account => <li key={account.userId}>
-      <div className="account-role-person"><HolderIdentity name={account.displayName} avatar={account.avatar} /><small>{account.email}</small></div>
+      <div className="account-role-person"><HolderIdentity name={account.displayName} avatar={account.avatar} role={account.role} /><small>{account.email}</small></div>
       {canManage ? <div className="account-role-select"><StyledSelect ariaLabel={"Role của " + account.displayName} disabled={!!saving} value={account.role} onChange={role => void assign(account, role)} options={[{ value: "", label: "Chưa gán role" }, ...accountRoles.map(role => ({ value: role, label: role }))]} placeholder="Chưa gán role" /></div>
         : <span className="status-chip">{account.role || "Chưa gán role"}</span>}
     </li>)}</ul>

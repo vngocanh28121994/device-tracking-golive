@@ -12,7 +12,7 @@ type Unfinished = { issueKey: string; summary: string; assignee: string };
 type Ticket = { id: number; releaseId: string; issueKey: string; summary: string; assignee: string; assigneeUserId: string | null; doneAt: string | null };
 type RecordedDevice = { ticketId: number; deviceId: string; deviceName: string };
 const REFRESH_MS = 60_000;
-type Person = { userId: string; displayName: string; avatar: string };
+type Person = { userId: string; displayName: string; avatar: string; role?: string };
 type SortKey = "issueKey" | "summary" | "assignee";
 type HeldDevice = { id: string; name: string; category: string };
 type DeviceCheck = { ticketId: number; deviceId: string; deviceName: string; checkedByUserId: string; checkedAt: string };
@@ -160,7 +160,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
   const projects = useMemo(() => Array.from(new Set(tickets.map(item => item.issueKey.split("-")[0]))).sort(), [tickets]);
   const testerOptions = useMemo(() => {
     const names = Array.from(new Set(tickets.map(item => item.assignee))).sort((a, b) => (a ? 0 : 1) - (b ? 0 : 1) || a.localeCompare(b, "vi"));
-    return [{ value: "__all__", label: "Tất cả người test", description: tickets.length + " " + rowLabel }, ...names.map(name => ({ value: name, label: name || "Chưa có người test", description: tickets.filter(item => item.assignee === name).length + (manual ? " checklist" : " ticket"), avatar: people.find(person => person.userId === tickets.find(item => item.assignee === name)?.assigneeUserId)?.avatar }))];
+    return [{ value: "__all__", label: "Tất cả người test", description: tickets.length + " " + rowLabel }, ...names.map(name => ({ value: name, label: name || "Chưa có người test", description: tickets.filter(item => item.assignee === name).length + (manual ? " checklist" : " ticket"), avatar: people.find(person => person.userId === tickets.find(item => item.assignee === name)?.assigneeUserId)?.avatar, role: people.find(person => person.userId === tickets.find(item => item.assignee === name)?.assigneeUserId)?.role }))];
   }, [tickets, people, rowLabel, manual]);
   const visible = useMemo(() => {
     const rows = tickets.filter(item => includes(item.issueKey + " " + item.summary + " " + item.assignee, query)
@@ -230,7 +230,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
         <section className="panel table-panel"><div className="table-scroll"><table className={"golive-table" + (manual ? " golive-manual-table" : "")}><thead><tr>{!manual && <>{sortHeader("issueKey", "MÃ")}{sortHeader("summary", "TÊN TICKET")}</>}{sortHeader("assignee", "NGƯỜI TEST")}<th>TRẠNG THÁI</th><th>THIẾT BỊ ĐÃ TEST</th></tr></thead><tbody>{visible.map(ticket => <tr key={ticket.id}>
           {!manual && <><td className="golive-key">{ticket.issueKey}</td>
           <td className="golive-summary">{ticket.summary || <span className="muted">(không có tên)</span>}</td></>}
-          <td className="golive-assignee">{ticket.assignee ? <HolderIdentity name={ticket.assignee} avatar={people.find(person => person.userId === ticket.assigneeUserId)?.avatar || ""} /> : <span className="muted">Chưa có người test</span>}</td>
+          <td className="golive-assignee">{ticket.assignee ? <HolderIdentity name={ticket.assignee} avatar={people.find(person => person.userId === ticket.assigneeUserId)?.avatar || ""} role={people.find(person => person.userId === ticket.assigneeUserId)?.role} /> : <span className="muted">Chưa có người test</span>}</td>
           <td className="golive-ticket-status"><span className={statusClass(statusOf(ticket))}>{statusOf(ticket)}</span></td>
           <td className="golive-devices">{!ticket.assignee ? <span className="muted">Chưa có người test</span> : !ticket.assigneeUserId ? <span className="muted">“{ticket.assignee}” chưa khớp tài khoản nào</span> : (() => {
             const list = ticketDevices(ticket), mine = ticket.assigneeUserId === currentUserId && !current?.completedAt;

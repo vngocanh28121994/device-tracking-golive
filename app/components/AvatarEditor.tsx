@@ -1,8 +1,9 @@
 "use client";
 import { type ChangeEvent, useRef, useState } from "react";
 import { Camera, Trash2 } from "lucide-react";
+import { UserAvatar } from "./HolderIdentity";
 
-export function AvatarEditor({ value, name, disabled, onChange, onProcessingChange }: { value: string; name: string; disabled: boolean; onChange: (value: string) => void; onProcessingChange: (value: boolean) => void }) {
+export function AvatarEditor({ value, name, role = "", disabled, onChange, onProcessingChange }: { value: string; name: string; role?: string; disabled: boolean; onChange: (value: string) => void; onProcessingChange: (value: boolean) => void }) {
   const input = useRef<HTMLInputElement>(null);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState("");
@@ -29,7 +30,7 @@ export function AvatarEditor({ value, name, disabled, onChange, onProcessingChan
     finally { URL.revokeObjectURL(url); setProcessing(false); onProcessingChange(false); }
   }
   return <div className="avatar-editor">
-    <div className="avatar-editor-preview" aria-label="Xem trước ảnh đại diện">{value ? <img src={value} alt="Ảnh đại diện của bạn"/> : <span>{(name.trim() || "?").slice(0,1).toLocaleUpperCase("vi")}</span>}</div>
+    <UserAvatar className="avatar-editor-preview" name={name.trim() || "?"} src={value} role={role} />
     <div className="avatar-editor-copy"><strong>Ảnh đại diện</strong><p>JPG, PNG hoặc WebP · tối đa 5 MB.<br/>Ảnh được cắt vuông và thu nhỏ trước khi lưu.</p>
       <input ref={input} type="file" accept="image/jpeg,image/png,image/webp" onChange={event => void choose(event)} aria-label="Chọn ảnh đại diện" hidden/>
       <div className="avatar-editor-actions"><button type="button" className="outline-button" disabled={disabled || processing} onClick={()=>input.current?.click()}><Camera size={16}/>{processing ? "Đang xử lý…" : value ? "Đổi ảnh" : "Tải ảnh lên"}</button>{value && <button type="button" className="text-button" disabled={disabled || processing} onClick={()=>{onChange("");setError("")}}><Trash2 size={15}/> Xóa ảnh</button>}</div>

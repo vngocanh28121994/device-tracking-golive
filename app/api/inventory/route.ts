@@ -45,7 +45,7 @@ export async function GET() {
       all = await db.select().from(devices);
     }
     const active = all.filter((item) => !item.archived);
-    const profiles = await db.select({userId:userProfiles.userId,displayName:userProfiles.displayName,avatarKey:userProfiles.avatarKey}).from(userProfiles);
+    const profiles = await db.select({userId:userProfiles.userId,displayName:userProfiles.displayName,avatarKey:userProfiles.avatarKey,role:userProfiles.role}).from(userProfiles);
     // Legacy holders have no account ID. Match only a unique name; explicit manual loans use "".
     const resolved = active.map(item => {
       if (item.holderUserId !== null) {
@@ -55,7 +55,7 @@ export async function GET() {
       const matches = profiles.filter(person => person.displayName === item.holder);
       return {...item,holderUserId:matches.length === 1 ? matches[0].userId : null};
     });
-    const people = profiles.map(person => ({userId:person.userId,displayName:person.displayName,avatar:avatarUrl(person.avatarKey)}));
+    const people = profiles.map(person => ({userId:person.userId,displayName:person.displayName,avatar:avatarUrl(person.avatarKey),role:person.role}));
     return Response.json({ devices: resolved, people }, { headers: { "Cache-Control": "private, no-store" } });
   } catch {
     return error("Không thể tải dữ liệu", 500);
