@@ -14,6 +14,9 @@ Who gets what:
 | Every ticket of the release is Done | everyone |
 | Release completed | everyone |
 
+The admin or a Manager can turn each type off in **Tài khoản của tôi → Thông báo đẩy** (`push_settings`; no row = on).
+When "Manager taps remind" is off, the remind button reports it instead of sending.
+
 Setup (once): create a Firebase project and a Web app, then set three hosted runtime values (see `.env.example`):
 `FIREBASE_WEB_CONFIG` (web app config JSON), `FIREBASE_VAPID_KEY` (Cloud Messaging → Web Push certificates),
 `FIREBASE_SERVICE_ACCOUNT` (Project settings → Service accounts → Generate new private key, as one-line JSON; secret).

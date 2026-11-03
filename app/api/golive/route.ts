@@ -4,7 +4,7 @@ import { getDb } from "../../../db";
 import { devices, goliveDeviceChecks, goliveReleases, goliveTicketDevices, goliveTickets, goliveWebSignoffs, userProfiles } from "../../../db/schema";
 import { normalizeName } from "../../lib/golive";
 import { waitUntil } from "cloudflare:workers";
-import { notifyRoles, notifyUsers } from "../../lib/push";
+import { notifyRoles, notifyUsers, pushEnabled } from "../../lib/push";
 
 type Db = ReturnType<typeof getDb>;
 const MAX_COMPLETED = 10;
@@ -18,8 +18,8 @@ const WATCHERS = ["Manager", "PM"], EVERYONE = ["Manager", "QE", "DEV", "PM"];
 async function announceDone(db: Db, releaseId: string, releaseName: string, done: { assignee: string }[]) {
   const open = await db.select({ assignee: goliveTickets.assignee }).from(goliveTickets).where(and(eq(goliveTickets.releaseId, releaseId), isNull(goliveTickets.doneAt)));
   const finished = Array.from(new Set(done.map(item => item.assignee).filter(name => name && !open.some(row => row.assignee === name))));
-  for (const name of finished) await notifyRoles(db, WATCHERS, { title: "QE đã test xong", body: name + " đã test xong đợt " + releaseName + "." });
-  if (!open.length) await notifyRoles(db, EVERYONE, { title: "Golive đã test xong", body: "Tất cả đã test xong đợt " + releaseName + ". Manager có thể bấm Hoàn thành." });
+  for (const name of finished) await notifyRoles(db, WATCHERS, { event: "qe-done", title: "QE đã test xong", body: name + " đã test xong đợt " + releaseName + "." });
+  if (!open.length) await notifyRoles(db, EVERYONE, { event: "all-done", title: "Golive đã test xong", body: "Tất cả đã test xong đợt " + releaseName + ". Manager có thể bấm Hoàn thành." });
 }
 
 // A tester name maps to an account only when exactly one display name matches.
@@ -241,8 +241,8 @@ export async function POST(request: Request) {
       const web = await webPhase(db, releaseId);
       if (done) {
         const name = web.qe.find(person => person.userId === user.userId)?.displayName || user.displayName;
-        waitUntil(notifyRoles(db, WATCHERS, { title: "QE đã xong test web", body: name + " đã xác nhận test web đợt " + release.name + "." }));
-        if (web.qe.every(person => person.userId in web.signed)) waitUntil(notifyRoles(db, EVERYONE, { title: "Test web hoàn tất", body: "Tất cả QE đã test xong web đợt " + release.name + ". Bắt đầu test app." }));
+        waitUntil(notifyRoles(db, WATCHERS, { event: "web-qe-done", title: "QE đã xong test web", body: name + " đã xác nhận test web đợt " + release.name + "." }));
+        if (web.qe.every(person => person.userId in web.signed)) waitUntil(notifyRoles(db, EVERYONE, { event: "web-all-done", title: "Test web hoàn tất", body: "Tất cả QE đã test xong web đợt " + release.name + ". Bắt đầu test app." }));
       }
       return Response.json({ web });
     }
@@ -256,7 +256,8 @@ export async function POST(request: Request) {
       if (me?.role !== "Manager") return error("Chỉ Manager mới được nhắc nhở.", 403);
       if (!release) return error("Không tìm thấy đợt golive.", 404);
       const pending = web.qe.filter(person => !(person.userId in web.signed)).map(person => person.userId);
-      waitUntil(notifyUsers(db, pending, { title: "Nhắc test web", body: "Bạn chưa xác nhận test web đợt " + release.name + "." }));
+      if (!await pushEnabled(db, "remind-web")) return error("Nhắc nhở qua thông báo đang bị tắt trong cài đặt.", 409);
+      waitUntil(notifyUsers(db, pending, { event: "remind-web", title: "Nhắc test web", body: "Bạn chưa xác nhận test web đợt " + release.name + "." }));
       return Response.json({ pending: pending.length });
     }
     if (body.action === "complete-release") {
@@ -269,7 +270,7 @@ export async function POST(request: Request) {
       if (unfinished.length) return Response.json({ error: "Còn " + unfinished.length + (release.source === "manual" ? " người test" : " ticket") + " chưa Done.", unfinished }, { status: 409 });
       const [profile] = await db.select({ displayName: userProfiles.displayName }).from(userProfiles).where(eq(userProfiles.userId, user.userId));
       const [updated] = await db.update(goliveReleases).set({ completedAt: now, completedBy: profile?.displayName || user.displayName || user.email }).where(eq(goliveReleases.id, releaseId)).returning();
-      waitUntil(notifyRoles(db, EVERYONE, { title: "Golive hoàn thành 🎉", body: "Đợt " + release.name + " đã hoàn thành." }));
+      waitUntil(notifyRoles(db, EVERYONE, { event: "release-completed", title: "Golive hoàn thành 🎉", body: "Đợt " + release.name + " đã hoàn thành." }));
       // History keeps only the newest completed releases.
       const completed = await db.select({ id: goliveReleases.id }).from(goliveReleases).where(isNotNull(goliveReleases.completedAt)).orderBy(desc(goliveReleases.completedAt));
       for (const old of completed.slice(MAX_COMPLETED)) await deleteRelease(db, old.id);

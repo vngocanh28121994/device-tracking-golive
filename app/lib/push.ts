@@ -1,11 +1,12 @@
 import { env } from "cloudflare:workers";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import type { getDb } from "../../db";
-import { pushTokens, userProfiles } from "../../db/schema";
+import { pushSettings, pushTokens, userProfiles } from "../../db/schema";
+import type { PushEvent } from "./push-events";
 
 type Db = ReturnType<typeof getDb>;
 type ServiceAccount = { project_id: string; client_email: string; private_key: string };
-export type PushMessage = { title: string; body: string; link?: string };
+export type PushMessage = { event: PushEvent; title: string; body: string; link?: string };
 const runtime = () => env as unknown as Record<string, string | undefined>;
 
 // Browser-side Firebase config is public; null until all hosted runtime values are set.
@@ -39,6 +40,12 @@ function parseAccount(raw: string): ServiceAccount {
   try { return JSON.parse(raw); } catch { return JSON.parse(raw.replace(/\r?\n/g, "\\n")); }
 }
 
+// A type without a settings row is on.
+export async function pushEnabled(db: Db, event: PushEvent) {
+  const [row] = await db.select({ enabled: pushSettings.enabled }).from(pushSettings).where(eq(pushSettings.event, event));
+  return row?.enabled ?? true;
+}
+
 // Best effort: a failed push never fails the action that triggered it. Tokens FCM no longer knows are removed.
 // ponytail: one FCM request per token and at most 90 accounts per call; fine for one team, batch if it grows.
 export async function notifyUsers(db: Db, userIds: string[], message: PushMessage) {
@@ -46,6 +53,7 @@ export async function notifyUsers(db: Db, userIds: string[], message: PushMessag
   const ids = Array.from(new Set(userIds)).slice(0, 90);
   if (!raw || !ids.length) return;
   try {
+    if (!await pushEnabled(db, message.event)) return;
     const account = parseAccount(raw);
     const rows = await db.select({ token: pushTokens.token }).from(pushTokens).where(inArray(pushTokens.userId, ids));
     if (!rows.length) return;

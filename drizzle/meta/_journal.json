@@ -134,6 +134,13 @@
       "when": 1793715416088,
       "tag": "0018_push-tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1793721025067,
+      "tag": "0019_push-settings",
+      "breakpoints": true
     }
   ]
 }
