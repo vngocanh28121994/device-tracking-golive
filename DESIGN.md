@@ -32,3 +32,10 @@ Receive/lend confirmations use a short catch-the-device interaction. The basket 
 - Keep search visible; mobile cards keep the default tester A–Z order without a sort picker (desktop sorts by column header). Column filters and release actions expand from labeled buttons.
 - Device rows and interactive controls need at least 44px touch targets. Form inputs and select triggers use 16px text; dialogs fit inside the viewport and scroll vertically.
 - Role assignment stacks each account above its role selector. Wrap long names, emails and fixVersions; preserve desktop tables above the mobile breakpoint.
+
+## Dark mode
+
+- A toggle in the top bar switches light/dark; the choice is saved per browser, and the first visit follows the OS setting. `app/layout.tsx` applies it before first paint.
+- Tokens remap under `:root[data-theme="dark"]`. Elevation is explicit: canvas `#131017` < card surface `#1c1822` < raised `#262030` with a visible border for dialogs, popovers and toasts (shadows alone do not read on dark).
+- `--accent` is the lighter `#b393f0` so accent text passes 4.5:1; solid accent fills (primary buttons) use the darker `#7a4fcc` under white text.
+- Literal colours get dark counterparts from `scripts/generate-dark-theme.py` (rerun after adding one); hand-tuned dark rules go after the generated block. Check contrast in both themes after colour changes.
