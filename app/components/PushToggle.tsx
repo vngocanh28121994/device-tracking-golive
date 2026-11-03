@@ -15,7 +15,10 @@ export function PushToggle({ onError, onToast }: { onError: (message: string) =>
   const [token, setToken] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    try { if ("Notification" in window && Notification.permission === "granted") setToken(localStorage.getItem(KEY)); } catch { /* storage blocked */ }
+    // Read after mount so the server and first client render agree.
+    void Promise.resolve().then(() => {
+      try { if ("Notification" in window && Notification.permission === "granted") setToken(localStorage.getItem(KEY)); } catch { /* storage blocked */ }
+    });
   }, []);
 
   async function enable() {
