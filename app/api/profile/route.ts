@@ -4,7 +4,7 @@ import { getChatGPTUser } from "../../chatgpt-auth";
 import { getDb } from "../../../db";
 import { devices, userProfiles } from "../../../db/schema";
 import { avatarUrl, decodeAvatar } from "../../lib/avatar";
-import { validRole } from "../../lib/roles";
+import { canManageAccountRoles, validRole } from "../../lib/roles";
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { "Cache-Control": "private, no-store" } });
 
 export async function GET(request: Request) {
@@ -16,7 +16,7 @@ export async function GET(request: Request) {
       const rows = await db.select().from(userProfiles);
       const accounts = rows.map(row => ({ userId: row.userId, email: row.email, displayName: row.displayName, role: row.role, avatar: avatarUrl(row.avatarKey) }));
       accounts.sort((a, b) => a.displayName.localeCompare(b.displayName, "vi"));
-      return json({ accounts, canManageRoles: rows.find(row => row.userId === user.userId)?.role === "Manager" });
+      return json({ accounts, canManageRoles: canManageAccountRoles(rows.find(row => row.userId === user.userId)?.role, user.email) });
     }
     const [saved] = await db.select().from(userProfiles).where(eq(userProfiles.userId, user.userId)).limit(1);
     return json({ profile: { userId: user.userId, email: user.email, displayName: saved?.displayName ?? "", suggestedName: user.fullName ?? "", configured: Boolean(saved), avatar: avatarUrl(saved?.avatarKey || "") } });
@@ -36,16 +36,12 @@ export async function POST(request: Request) {
     if (body.action === "assign-role") {
       const db = getDb();
       const [actor] = await db.select().from(userProfiles).where(eq(userProfiles.userId, user.userId));
-      if (actor?.role !== "Manager") return json({ error: "Chỉ Manager được gán role cho tài khoản." }, 403);
+      if (!canManageAccountRoles(actor?.role, user.email)) return json({ error: "Chỉ người quản trị hoặc Manager được gán role cho tài khoản." }, 403);
       if (typeof body.userId !== "string" || !validRole(body.role)) return json({ error: "Tài khoản hoặc role không hợp lệ." }, 400);
       const [target] = await db.select().from(userProfiles).where(eq(userProfiles.userId, body.userId));
       if (!target) return json({ error: "Không tìm thấy tài khoản." }, 404);
-      const updated = await db.update(userProfiles).set({ role: body.role, updatedAt: new Date().toISOString() }).where(sql`
-        ${userProfiles.userId} = ${body.userId}
-        AND (${userProfiles.role} != 'Manager' OR ${body.role} = 'Manager'
-          OR (SELECT count(*) FROM user_profiles WHERE role = 'Manager') > 1)
-      `).returning({ userId: userProfiles.userId, role: userProfiles.role });
-      if (!updated.length) return json({ error: "Cần giữ ít nhất một Manager để quản lý role." }, 409);
+      const updated = await db.update(userProfiles).set({ role: body.role, updatedAt: new Date().toISOString() })
+        .where(eq(userProfiles.userId, body.userId)).returning({ userId: userProfiles.userId, role: userProfiles.role });
       return json({ account: updated[0] });
     }
     const displayName = typeof body.displayName === "string" ? body.displayName.trim() : "";

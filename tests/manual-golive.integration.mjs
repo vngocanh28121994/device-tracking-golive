@@ -28,10 +28,7 @@ try {
   }
   assert.equal((await request("/api/profile", { action: "assign-role", userId: testerId, role: "QE" })).status, 200);
   assert.equal((await request("/api/profile", { action: "assign-role", userId: testerId, role: "Admin" })).status, 400);
-  if (sql("SELECT count(*) FROM user_profiles WHERE role='Manager';").trim() === "1") {
-    assert.equal((await request("/api/profile", { action: "assign-role", userId: actor.userId, role: "QE" })).status, 409);
-  }
-  sql(`UPDATE user_profiles SET role='QE' WHERE user_id=${literal(actor.userId)};`);
+  assert.equal((await request("/api/profile", { action: "assign-role", userId: actor.userId, role: "QE" })).status, 200);
   assert.equal((await request("/api/profile", { action: "assign-role", userId: developerId, role: "Manager" })).status, 403);
   assert.equal((await request("/api/profile", { displayName: actor.displayName, role: "Manager" })).status, 200);
   assert.equal(sql(`SELECT role FROM user_profiles WHERE user_id=${literal(actor.userId)};`).trim(), "QE");
@@ -64,7 +61,7 @@ try {
     assert.ok(saved.completedAt); assert.equal(saved.fixVersion, "release-complete");
     assert.equal((await request("/api/golive", { action: "toggle-check", ticketId: row.id, deviceId, checked: false })).status, 409);
   }
-  console.log("Passed: role permissions, last Manager, role escalation, QE-only creation, validation, checklist permissions, Done, fixed participants and completed history.");
+  console.log("Passed: role permissions, self role change, role escalation, QE-only creation, validation, checklist permissions, Done, fixed participants and completed history.");
 } finally {
   for (const releaseId of releaseIds) await request("/api/golive", { action: "delete-release", releaseId });
   sql(`DELETE FROM devices WHERE id=${literal(deviceId)};

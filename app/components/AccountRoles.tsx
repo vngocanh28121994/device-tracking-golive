@@ -39,7 +39,7 @@ export function AccountRoles() {
 
   return <section className="panel account-roles" aria-labelledby="account-roles-title">
     <h2 id="account-roles-title">Role trong team</h2>
-    <p>Manager gán role cho tài khoản. Các tài khoản QE được đưa vào danh sách test khi tạo đợt golive mới.</p>
+    <p>Người quản trị hoặc Manager gán role cho tài khoản. Các tài khoản QE được đưa vào danh sách test khi tạo đợt golive mới.</p>
     {loading && <p role="status">Đang tải tài khoản...</p>}
     {error && <p className="role-error" role="alert">{error}</p>}
     <p className="role-feedback" role="status">{message}</p>
@@ -48,6 +48,6 @@ export function AccountRoles() {
       {canManage ? <div className="account-role-select"><StyledSelect ariaLabel={"Role của " + account.displayName} disabled={!!saving} value={account.role} onChange={role => void assign(account, role)} options={[{ value: "", label: "Chưa gán role" }, ...accountRoles.map(role => ({ value: role, label: role }))]} placeholder="Chưa gán role" /></div>
         : <span className="status-chip">{account.role || "Chưa gán role"}</span>}
     </li>)}</ul>
-    {!loading && !canManage && <p>Chỉ Manager được thay đổi role.</p>}
+    {!loading && !canManage && <p>Chỉ người quản trị hoặc Manager được thay đổi role.</p>}
   </section>;
 }
