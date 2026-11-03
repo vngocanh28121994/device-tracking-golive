@@ -605,3 +605,17 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
   .signin-banner { align-items: stretch; flex-direction: column; padding: 16px; }
   .toast { left: 12px; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); max-width: none; }
 }
+
+/* Golive: tickets marked as not needing a test */
+.golive-skipped { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 10px 12px; border-radius: 12px; background: var(--surface-muted, rgba(127,127,127,.08)); }
+.golive-skipped > span { display: inline-flex; align-items: center; gap: 7px; font-weight: 650; }
+.golive-skipped small { color: var(--muted); font-weight: 500; margin-left: 4px; }
+.golive-skip-button { font-size: 12px; }
+.golive-devices > .golive-skip-button { display: flex; margin-top: 4px; padding-left: 0; min-height: 32px; white-space: nowrap; }
+.golive-skipped > span { flex-wrap: wrap; }
+.golive-skipped .golive-skip-button { min-height: 32px; padding: 4px 10px; }
+@media (max-width: 760px) {
+  .golive-skipped { flex-direction: row; align-items: center; justify-content: space-between; }
+  .golive-skipped .golive-skip-button, .golive-devices > .golive-skip-button { min-height: 44px; }
+  .golive-skipped .golive-skip-button { padding: 8px 14px; }
+}

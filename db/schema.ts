@@ -84,6 +84,9 @@ export const goliveTickets = sqliteTable("golive_tickets", {
   status: text("status").notNull().default("To Do"),
   updatedAt: text("updated_at").notNull(),
   doneAt: text("done_at"),
+  // Set when someone marks the ticket as not needing a test; the ticket counts as Done.
+  skippedAt: text("skipped_at"),
+  skippedBy: text("skipped_by"),
 }, table => [index("golive_tickets_release_id_idx").on(table.releaseId)]);
 
 export const goliveDeviceChecks = sqliteTable("golive_device_checks", {
