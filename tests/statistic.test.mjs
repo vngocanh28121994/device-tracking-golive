@@ -29,8 +29,8 @@ console.log("Statistic done-marks: ticks report the last tick, confirmations rep
 
 import { doneKindOf, tallyByTester } from "../app/lib/statistic.ts";
 
-const ticket = (assignee, assigneeUserId, doneAt, skippedAt = null, skipKind = "not-needed") =>
-  ({ assignee, assigneeUserId, doneAt, skippedAt, skipKind });
+const ticket = (assignee, assigneeUserId, doneAt, skippedAt = null, skipKind = "not-needed", failedAt = null) =>
+  ({ assignee, assigneeUserId, doneAt, skippedAt, skipKind, failedAt });
 
 const tally = tallyByTester([
   ticket("Minh Anh", "u_anh", "2026-11-02T07:00:00.000Z"),
@@ -45,15 +45,15 @@ const tally = tallyByTester([
 
 // Whoever has the most left to test leads; the no-tester bucket is always last.
 assert.deepEqual(tally.map(row => row.name), ["Gia Bảo", "Minh Anh", ""]);
-assert.deepEqual(tally[0], { name: "Gia Bảo", userId: "u_bao", done: 1, open: 2, total: 3, onDevices: 0, confirmed: 1, notNeeded: 0, cannotTest: 0 });
-assert.deepEqual(tally[1], { name: "Minh Anh", userId: "u_anh", done: 2, open: 1, total: 3, onDevices: 1, confirmed: 0, notNeeded: 1, cannotTest: 0 });
-assert.deepEqual(tally[2], { name: "", userId: null, done: 0, open: 1, total: 1, onDevices: 0, confirmed: 0, notNeeded: 0, cannotTest: 0 });
+assert.deepEqual(tally[0], { name: "Gia Bảo", userId: "u_bao", done: 1, failed: 0, open: 2, total: 3, onDevices: 0, confirmed: 1, notNeeded: 0, cannotTest: 0 });
+assert.deepEqual(tally[1], { name: "Minh Anh", userId: "u_anh", done: 2, failed: 0, open: 1, total: 3, onDevices: 1, confirmed: 0, notNeeded: 1, cannotTest: 0 });
+assert.deepEqual(tally[2], { name: "", userId: null, done: 0, failed: 0, open: 1, total: 1, onDevices: 0, confirmed: 0, notNeeded: 0, cannotTest: 0 });
 
 // The three done kinds add back up to done, and with open they span the tester's whole total,
 // so the four slices of the stacked bar can neither overflow nor leave a gap.
 for (const row of tally) {
   assert.equal(row.onDevices + row.confirmed + row.notNeeded + row.cannotTest, row.done);
-  assert.equal(row.onDevices + row.confirmed + row.notNeeded + row.cannotTest + row.open, row.total);
+  assert.equal(row.onDevices + row.confirmed + row.notNeeded + row.cannotTest + row.failed + row.open, row.total);
 }
 
 // A ticket Done purely from device ticks carries no skip mark; the other two kinds do.
@@ -70,7 +70,7 @@ const mixed = tallyByTester([
   ticket("Lan", "u_lan", "x", "x", "not-needed"),
   ticket("Lan", "u_lan", null),
 ])[0];
-assert.deepEqual(mixed, { name: "Lan", userId: "u_lan", done: 4, open: 1, total: 5, onDevices: 1, confirmed: 1, notNeeded: 1, cannotTest: 1 });
+assert.deepEqual(mixed, { name: "Lan", userId: "u_lan", done: 4, failed: 0, open: 1, total: 5, onDevices: 1, confirmed: 1, notNeeded: 1, cannotTest: 1 });
 
 // A tester whose account is only matched on a later ticket still names the whole group.
 const late = tallyByTester([ticket("Minh Anh", null, null), ticket("Minh Anh", "u_anh", null)]);
@@ -104,3 +104,21 @@ assert.equal(notices.some(n => n.issueKeys.includes("ON-884")), false);
 assert.deepEqual(untestedNotices([]), []);
 
 console.log("Statistic reminders: one notice per tester, summarising every ticked ticket.");
+
+
+// A failing ticket is outstanding, not Done: it must not land in any DoneKind bucket, and it ranks
+// its tester alongside untested work rather than finished work.
+const withFailure = tallyByTester([
+  ticket("Lan", "u_lan", null, null, "not-needed", "2026-11-04T09:00:00.000Z"),
+  ticket("Lan", "u_lan", "2026-11-04T08:00:00.000Z"),
+  ticket("Lan", "u_lan", null),
+])[0];
+assert.deepEqual(withFailure, { name: "Lan", userId: "u_lan", done: 1, failed: 1, open: 1, total: 3, onDevices: 1, confirmed: 0, notNeeded: 0, cannotTest: 0 });
+
+// The mark column reports a failure the same way it reports a done mark.
+const failed = { ...base, failedAt: "2026-11-04T09:00:00.000Z", failedBy: "Minh Anh", testedDevices: 2, lastCheckedAt: "2026-11-04T08:00:00.000Z" };
+assert.equal(markedAt(failed), "2026-11-04T09:00:00.000Z");
+assert.equal(markedBy(failed), "Minh Anh");
+assert.equal(markedHow(failed), "Đánh dấu test failed");
+
+console.log("Statistic test-failed: outstanding rather than Done, and its own mark in the report.");

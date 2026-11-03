@@ -455,7 +455,9 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 .status-review { color: #70538c; background: #f2edf9; }
 .status-testing { color: #8a5a12; background: #fbf1df; }
 .status-done { color: #28715d; background: #e9f5ee; }
-.status-blocked { color: #a3333d; background: #fbe9ea; }
+.status-blocked { color: #a3333d; background: #efedf2; }
+/* A failing ticket is the one status that should pull the eye, so it keeps the red. */
+.status-failed { color: #a3333d; background: #fbe9ea; }
 .golive-table td { vertical-align: middle; }
 .golive-key { font-weight: 650; white-space: nowrap; color: var(--accent); font-size: 13px; }
 .golive-summary { font-size: 14px; min-width: 240px; overflow-wrap: anywhere; }
@@ -578,6 +580,12 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 .golive-complete { display: inline-flex; align-items: center; gap: 7px; margin-left: auto; }
 .golive-complete + .golive-delete, .golive-completed + .golive-delete { margin-left: 0; }
 .golive-completed { display: inline-flex; align-items: center; gap: 7px; margin-left: auto; padding: 8px 12px; border-radius: 10px; background: #e9f5ee; color: #28715d; font-size: 13px; font-weight: 600; }
+.golive-skipped-failed { border-color: #e7c2c6; background: #fdf3f4; }
+.golive-skipped-failed .golive-skipped-label strong { color: #a3333d; }
+.golive-fail-hint { font-style: italic; }
+.golive-fail-button { color: #a3333d; }
+.golive-fail-button:hover { color: #86202a; }
+.confirm-icon-failed { background: #fdecec; color: #b42335; }
 .golive-warning { max-width: 720px; width: min(720px, calc(100vw - 32px)); }
 .golive-warning-head { display: flex; gap: 12px; align-items: flex-start; }
 .golive-warning-head svg { color: #c2410c; flex: 0 0 auto; margin-top: 3px; }
@@ -763,6 +771,7 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 .stat-part-confirmed { background: #6fb9a0; }
 .stat-part-cannotTest { background: #d79a4e; }
 .stat-part-notNeeded { background: #9b8ec4; }
+.stat-part-failed { background: #c4505c; }
 .stat-part-open { background: #bdb6c7; }
 .stat-stack-counts { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 11px; margin-top: 7px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .stat-stack-total { white-space: nowrap; }
@@ -773,6 +782,7 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 .stat-legend-confirmed::before { background: #6fb9a0; }
 .stat-legend-cannotTest::before { background: #d79a4e; }
 .stat-legend-notNeeded::before { background: #9b8ec4; }
+.stat-legend-failed::before { background: #c4505c; }
 .stat-legend-open::before { background: #bdb6c7; }
 /* Floats above everything, so a slice inside a scrolling table can still name its tickets. */
 .stat-tip { position: fixed; z-index: 50; transform: translate(-50%, calc(-100% - 10px)); width: max-content; max-width: 340px; padding: 11px 13px; border-radius: 11px; background: var(--raised, var(--surface)); border: 1px solid var(--line); box-shadow: 0 14px 36px #2a1b3d26; pointer-events: none; font-size: 12px; }
@@ -804,6 +814,7 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 .stat-done-stamp { display: grid; gap: 3px; }
 .stat-done-stamp strong { font-size: 13px; font-weight: 650; font-variant-numeric: tabular-nums; }
 .stat-done-stamp small { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.stat-fail-reason { margin-top: 3px; color: #a3333d; }
 .stat-release-body .empty { padding: 28px 20px; }
 @media (max-width: 900px) {
   /* Three lines of copy per card, so these stay stacked where a golive stat goes side by side. */
@@ -995,7 +1006,9 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 :root[data-theme="dark"] .status-review { color: #c7b8d5; background: #342745; }
 :root[data-theme="dark"] .status-testing { color: #ead5b6; background: #554322; }
 :root[data-theme="dark"] .status-done { color: #bae6da; background: #2e4638; }
-:root[data-theme="dark"] .status-blocked { color: #e5abb0; background: #4c2224; }
+:root[data-theme="dark"] .status-blocked { color: #e5abb0; background: #1a171e; }
+:root[data-theme="dark"] /* A failing ticket is the one status that should pull the eye, :root[data-theme="dark"] so it keeps the red. */
+.status-failed { color: #e5abb0; background: #4c2224; }
 :root[data-theme="dark"] .manual-golive-dialog { color: var(--ink, #d4cee0); }
 :root[data-theme="dark"] .manual-golive-dialog::backdrop { background: #0f0a1866; }
 :root[data-theme="dark"] .account-role-chips button { color: #c8bbd8; }
@@ -1012,6 +1025,11 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 :root[data-theme="dark"] .signin-banner { border: 1px solid #423554; }
 :root[data-theme="dark"] .golive-filters label { color: #c7bfcc; }
 :root[data-theme="dark"] .golive-completed { background: #2e4638; color: #bae6da; }
+:root[data-theme="dark"] .golive-skipped-failed { border-color: #59393c; background: #451e22; }
+:root[data-theme="dark"] .golive-skipped-failed .golive-skipped-label strong { color: #e5abb0; }
+:root[data-theme="dark"] .golive-fail-button { color: #e5abb0; }
+:root[data-theme="dark"] .golive-fail-button:hover { color: #e9b3b9; }
+:root[data-theme="dark"] .confirm-icon-failed { background: #4c1d1d; color: #e6a9b0; }
 :root[data-theme="dark"] .golive-warning-head svg { color: #e7bcab; }
 :root[data-theme="dark"] .golive-history button:hover { border-color: #453857; background: #291942; }
 :root[data-theme="dark"] .golive-history-icon { background: #2e4638; color: #bae6da; }
@@ -1038,6 +1056,7 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 :root[data-theme="dark"] .stat-selection { background: #2f223c; }
 :root[data-theme="dark"] .stat-row-check { color: #b2e5d6; }
 :root[data-theme="dark"] .stat-table tr.stat-row-done { background: #273c2f; }
+:root[data-theme="dark"] .stat-fail-reason { color: #e5abb0; }
 :root[data-theme="dark"] .golive-web-mine { color: #bae6da; }
 :root[data-theme="dark"] .golive-web-done { border: 1px solid #3a5b49; background: #2e4638; color: #bfe9de; }
 :root[data-theme="dark"] .golive-web-done-text small { color: #bddcd3; }
@@ -1058,6 +1077,10 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 /* The light grey of an untested slice would outshine the coloured ones on a dark surface,
    reading as the most important part of the bar instead of the leftover it is. */
 :root[data-theme="dark"] .stat-part-open { background: #514860; }
+/* "In Progress" turned neutral in light mode so red could mean failure; the generator mapped that
+   neutral to almost the canvas colour, which erases the chip, and left the red one untouched. */
+:root[data-theme="dark"] .status-blocked { color: #c7bfcc; background: #332a3d; }
+:root[data-theme="dark"] .status-failed { color: #e5abb0; background: #4c2224; }
 :root[data-theme="dark"] .stat-legend-open::before { background: #514860; }
 /* The per-tester table sits inside a card and carries no header band in either theme. */
 :root[data-theme="dark"] .stat-tester-table th { background: none; }

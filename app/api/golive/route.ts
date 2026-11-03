@@ -62,7 +62,7 @@ async function loadRelease(db: Db, releaseId: string, now = new Date().toISOStri
   if (release && !release.completedAt) {
     const doneIds: number[] = [];
     for (const ticket of tickets) {
-      if (ticket.doneAt || !ticket.assigneeUserId) continue;
+      if (ticket.doneAt || ticket.failedAt || !ticket.assigneeUserId) continue;
       const ticked = new Set(checks.filter(item => item.ticketId === ticket.id).map(item => item.deviceId));
       const required = held.get(ticket.assigneeUserId) || [];
       if (required.length > 0 && required.every(device => ticked.has(device.id))) { ticket.doneAt = now; doneIds.push(ticket.id); }
@@ -215,11 +215,36 @@ export async function POST(request: Request) {
       if (completedAt) return error("Đợt golive đã hoàn thành, không thể sửa.", 409);
       const by = me?.displayName || user.displayName || user.email;
       // Undoing clears Done too; the next load marks it Done again if every device is already ticked.
-      await db.update(goliveTickets).set(skipped ? { skippedAt: now, skippedBy: by, skipKind: kind, skipReason: reason, skipNotified: notified, doneAt: now } : { skippedAt: null, skippedBy: null, skipKind: "not-needed", skipReason: "", skipNotified: false, doneAt: null }).where(eq(goliveTickets.id, ticketId));
+      await db.update(goliveTickets).set(skipped
+        ? { skippedAt: now, skippedBy: by, skipKind: kind, skipReason: reason, skipNotified: notified, doneAt: now, failedAt: null, failedBy: null, failedReason: "" }
+        : { skippedAt: null, skippedBy: null, skipKind: "not-needed", skipReason: "", skipNotified: false, doneAt: null }).where(eq(goliveTickets.id, ticketId));
       if (skipped) waitUntil(announceDone(db, ticket.releaseId, found.releaseName, [ticket]));
       const { tickets } = await loadRelease(db, ticket.releaseId, now, ticketId);
       const updated = tickets[0];
-      return Response.json({ doneAt: updated?.doneAt ?? null, skippedAt: updated?.skippedAt ?? null, skippedBy: updated?.skippedBy ?? null, skipKind: updated?.skipKind ?? "not-needed", skipReason: updated?.skipReason ?? "", skipNotified: updated?.skipNotified ?? false });
+      return Response.json({ doneAt: updated?.doneAt ?? null, failedAt: updated?.failedAt ?? null, failedBy: updated?.failedBy ?? null, failedReason: updated?.failedReason ?? "", skippedAt: updated?.skippedAt ?? null, skippedBy: updated?.skippedBy ?? null, skipKind: updated?.skipKind ?? "not-needed", skipReason: updated?.skipReason ?? "", skipNotified: updated?.skipNotified ?? false });
+    }
+    if (body.action === "fail-test") {
+      const ticketId = Number(body.ticketId), failed = body.failed !== false, reason = clean(body.reason, 500);
+      if (failed && !reason) return error("Hãy nhập lý do test failed.");
+      const [[found], profiles] = await Promise.all([
+        ticketWithRelease(db, ticketId),
+        db.select({ userId: userProfiles.userId, displayName: userProfiles.displayName, role: userProfiles.role }).from(userProfiles),
+      ]);
+      if (!found) return error("Không tìm thấy ticket.", 404);
+      const { ticket, completedAt } = found;
+      const me = profiles.find(item => item.userId === user.userId);
+      const tester = ticket.assigneeUserId ?? (ticket.assignee ? matchAccount(profiles, ticket.assignee) : null);
+      if (tester && tester !== user.userId && me?.role !== "Manager") return error("Chỉ người test của ticket hoặc Manager mới được đánh dấu ticket.", 403);
+      if (completedAt) return error("Đợt golive đã hoàn thành, không thể sửa.", 409);
+      const by = me?.displayName || user.displayName || user.email;
+      // Failing a ticket takes Done away and clears any skip mark; undoing lets the next load decide
+      // Done again from the device ticks, exactly as undoing a skip does.
+      await db.update(goliveTickets).set(failed
+        ? { failedAt: now, failedBy: by, failedReason: reason, doneAt: null, skippedAt: null, skippedBy: null, skipKind: "not-needed", skipReason: "", skipNotified: false }
+        : { failedAt: null, failedBy: null, failedReason: "" }).where(eq(goliveTickets.id, ticketId));
+      const { tickets } = await loadRelease(db, ticket.releaseId, now, ticketId);
+      const updated = tickets[0];
+      return Response.json({ doneAt: updated?.doneAt ?? null, failedAt: updated?.failedAt ?? null, failedBy: updated?.failedBy ?? null, failedReason: updated?.failedReason ?? "", skippedAt: updated?.skippedAt ?? null, skippedBy: updated?.skippedBy ?? null, skipKind: updated?.skipKind ?? "not-needed", skipReason: updated?.skipReason ?? "", skipNotified: updated?.skipNotified ?? false });
     }
     if (body.action === "web-signoff") {
       const releaseId = clean(body.releaseId, 60), done = body.done !== false;

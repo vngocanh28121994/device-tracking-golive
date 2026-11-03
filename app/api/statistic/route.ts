@@ -49,6 +49,7 @@ export async function GET(request: Request) {
           assignee: ticket.assignee,
           assigneeUserId: ticket.assigneeUserId ?? (ticket.assignee ? matchAccount(profiles, ticket.assignee) : null),
           doneAt: ticket.doneAt, skippedAt: ticket.skippedAt, skippedBy: ticket.skippedBy, skipKind: ticket.skipKind,
+          failedAt: ticket.failedAt, failedBy: ticket.failedBy, failedReason: ticket.failedReason,
           testedDevices: tick?.devices ?? 0, lastCheckedAt: tick?.lastCheckedAt ?? null,
         };
       });
@@ -60,11 +61,12 @@ export async function GET(request: Request) {
         releaseId: goliveTickets.releaseId,
         total: sql<number>`count(*)`,
         done: sql<number>`sum(case when ${goliveTickets.doneAt} is null then 0 else 1 end)`,
+        failed: sql<number>`sum(case when ${goliveTickets.failedAt} is null then 0 else 1 end)`,
       }).from(goliveTickets).groupBy(goliveTickets.releaseId),
     ]);
     const releases = rows.map(release => {
       const count = counts.find(item => item.releaseId === release.id);
-      return { ...release, total: count?.total ?? 0, done: Number(count?.done ?? 0) };
+      return { ...release, total: count?.total ?? 0, done: Number(count?.done ?? 0), failed: Number(count?.failed ?? 0) };
     });
     return json({ releases });
   } catch {

@@ -5,17 +5,23 @@ import { HolderIdentity } from "./HolderIdentity";
 import { LoadingState } from "./LoadingState";
 import { doneKindOf, markedAt, markedBy, markedHow, tallyByTester, TesterTally } from "../lib/statistic";
 
-type Release = { id: string; name: string; source: string; fixVersion: string; createdBy: string; createdAt: string; completedAt: string | null; completedBy: string | null; total: number; done: number };
-type Ticket = { id: number; issueKey: string; summary: string; assignee: string; assigneeUserId: string | null; doneAt: string | null; skippedAt: string | null; skippedBy: string | null; skipKind: string; testedDevices: number; lastCheckedAt: string | null };
+type Release = { id: string; name: string; source: string; fixVersion: string; createdBy: string; createdAt: string; completedAt: string | null; completedBy: string | null; total: number; done: number; failed: number };
+type Ticket = { id: number; issueKey: string; summary: string; assignee: string; assigneeUserId: string | null; doneAt: string | null; skippedAt: string | null; skippedBy: string | null; skipKind: string; testedDevices: number; lastCheckedAt: string | null; failedAt: string | null; failedBy: string | null; failedReason: string };
 type Person = { userId: string; displayName: string; avatar: string; role?: string };
 // The hovered slice of a tester's bar, with the very tickets it stands for.
 type Tip = { x: number; y: number; label: string; tickets: Ticket[] };
 
 // The Manager's picks are a working note, not shared data, so they stay in this browser.
 const SELECTION_KEY = "statistic-selection";
-const prettyDate = (iso: string) => new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Asia/Ho_Chi_Minh" }).format(new Date(iso));
-const prettyStamp = (iso: string) => new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Ho_Chi_Minh" }).format(new Date(iso));
-const statusClass = (done: boolean) => "status-chip " + (done ? "status-done" : "status-blocked");
+// A report should never white-screen over one bad row, and Intl throws on an unparseable date.
+const format = (iso: string, options: Intl.DateTimeFormatOptions) => {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? "Không rõ thời điểm" : new Intl.DateTimeFormat("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", ...options }).format(date);
+};
+const prettyDate = (iso: string) => format(iso, { day: "2-digit", month: "2-digit", year: "numeric" });
+const prettyStamp = (iso: string) => format(iso, { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+const statusOf = (ticket: { doneAt: string | null; failedAt: string | null }) => ticket.failedAt ? "Test Failed" : ticket.doneAt ? "Done" : "In Progress";
+const statusClass = (status: string) => "status-chip " + (status === "Done" ? "status-done" : status === "Test Failed" ? "status-failed" : "status-blocked");
 // Stacked left to right, most actual testing first, so a bar's green head shows real device coverage
 // and its grey tail shows what is still outstanding. The four slices always span the tester's total.
 const BAR_PARTS = [
@@ -23,6 +29,7 @@ const BAR_PARTS = [
   { kind: "confirmed", short: "đã test xong", label: "ticket người test xác nhận đã test xong" },
   { kind: "cannotTest", short: "không test được", label: "ticket được đánh dấu không test được" },
   { kind: "notNeeded", short: "không cần test", label: "ticket được đánh dấu không cần test" },
+  { kind: "failed", short: "test failed", label: "ticket test failed" },
   { kind: "open", short: "chưa test", label: "ticket chưa test" },
 ] as const;
 
@@ -94,7 +101,8 @@ export function StatisticBoard({ people, onToast, onError }: { people: Person[];
   const totals = useMemo(() => {
     const list = releases || [];
     const done = list.reduce((sum, item) => sum + item.done, 0), total = list.reduce((sum, item) => sum + item.total, 0);
-    return { releases: list.length, running: list.filter(item => !item.completedAt).length, done, open: total - done, total };
+    const failed = list.reduce((sum, item) => sum + item.failed, 0);
+    return { releases: list.length, running: list.filter(item => !item.completedAt).length, done, failed, open: total - done - failed, total };
   }, [releases]);
 
   if (error) return <>
@@ -112,7 +120,8 @@ export function StatisticBoard({ people, onToast, onError }: { people: Person[];
       <div className="golive-stats stat-summary">
         <div className="golive-stat"><span className="status-chip">Đợt golive</span><strong>{totals.releases}</strong><small>{totals.running} đang thực hiện</small></div>
         <div className="golive-stat"><span className="status-chip status-done">Done</span><strong>{totals.done}</strong><small>trên {totals.total} ticket</small></div>
-        <div className="golive-stat"><span className="status-chip status-blocked">Chưa done</span><strong>{totals.open}</strong><small>cần theo dõi</small></div>
+        <div className="golive-stat"><span className="status-chip status-failed">Test failed</span><strong>{totals.failed}</strong><small>cần xử lý</small></div>
+        <div className="golive-stat"><span className="status-chip status-blocked">Chưa test</span><strong>{totals.open}</strong><small>cần theo dõi</small></div>
       </div>
       <ul className="stat-releases">{releases.map(release => {
         const expanded = open.includes(release.id);
@@ -132,7 +141,9 @@ export function StatisticBoard({ people, onToast, onError }: { people: Person[];
           setTip({ x: Math.min(Math.max(rect.left + rect.width / 2, 180), window.innerWidth - 180), y: rect.top, label, tickets: matched });
         };
         const partMatcher = (kind: typeof BAR_PARTS[number]["kind"]) => (item: Ticket) =>
-          kind === "open" ? !item.doneAt : !!item.doneAt && doneKindOf(item) === kind;
+          kind === "open" ? !item.doneAt && !item.failedAt
+            : kind === "failed" ? !item.doneAt && !!item.failedAt
+            : !!item.doneAt && doneKindOf(item) === kind;
         const picks = selected[release.id] || [];
         const picked = picks.filter(id => openTickets.some(ticket => ticket.id === id));
         const percent = release.total ? Math.round(release.done / release.total * 100) : 0;
@@ -228,9 +239,9 @@ export function StatisticBoard({ people, onToast, onError }: { people: Person[];
                     <td className="golive-assignee">{ticket.assignee
                       ? <HolderIdentity name={ticket.assignee} avatar={person?.avatar || ""} role={person?.role} />
                       : <span className="muted">Chưa có người test</span>}</td>
-                    <td className="golive-ticket-status"><span className={statusClass(done)}>{done ? "Done" : "In Progress"}</span></td>
-                    <td className="stat-done-at">{done
-                      ? <span className="stat-done-stamp"><strong>{at ? prettyStamp(at) : "Không rõ thời điểm"}</strong><small>{markedHow(ticket)}{markedBy(ticket) ? " · " + markedBy(ticket) : ""}</small></span>
+                    <td className="golive-ticket-status"><span className={statusClass(statusOf(ticket))}>{statusOf(ticket)}</span></td>
+                    <td className="stat-done-at">{done || ticket.failedAt
+                      ? <span className="stat-done-stamp"><strong>{at ? prettyStamp(at) : "Không rõ thời điểm"}</strong><small>{markedHow(ticket)}{markedBy(ticket) ? " · " + markedBy(ticket) : ""}</small>{ticket.failedAt && ticket.failedReason && <small className="stat-fail-reason">{ticket.failedReason}</small>}</span>
                       : <span className="muted">{ticket.testedDevices > 0 ? "Đã tích " + ticket.testedDevices + " thiết bị, chưa đủ" : "Chưa đánh dấu"}</span>}</td>
                   </tr>;
                 })}</tbody></table></div>

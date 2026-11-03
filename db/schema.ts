@@ -98,6 +98,11 @@ export const goliveTickets = sqliteTable("golive_tickets", {
   // "Không test được": why, and whether the owning scrum team has been told.
   skipReason: text("skip_reason").notNull().default(""),
   skipNotified: integer("skip_notified", { mode: "boolean" }).notNull().default(false),
+  // "Test Failed": the tester ran it and it failed. Unlike every skip kind this does NOT make the
+  // ticket Done, so a release cannot be completed while one of its tickets is failing.
+  failedAt: text("failed_at"),
+  failedBy: text("failed_by"),
+  failedReason: text("failed_reason").notNull().default(""),
 }, table => [index("golive_tickets_release_id_idx").on(table.releaseId)]);
 
 export const goliveDeviceChecks = sqliteTable("golive_device_checks", {

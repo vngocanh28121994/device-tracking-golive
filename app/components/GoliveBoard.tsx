@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, History, CheckCircle2, ArrowUp, ArrowUpDown, Ban, Bell, Check, CircleSlash, Pencil, Globe, FileUp, Laptop, ListFilter, Plus, Rocket, Search, Smartphone, Tablet, Trash2, Undo2, X } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, History, CheckCircle2, ArrowUp, ArrowUpDown, Ban, Bell, Check, CircleSlash, Pencil, Globe, FileUp, Laptop, ListFilter, Plus, Rocket, Search, Smartphone, Tablet, Trash2, Undo2, X, XCircle } from "lucide-react";
 import { StyledSelect } from "./StyledSelect";
 import { HolderIdentity } from "./HolderIdentity";
 import { LoadingState } from "./LoadingState";
@@ -9,19 +9,20 @@ import { readUrlParam, writeUrlParams } from "../lib/url-state";
 import { ImportedTicket, normalizeName, releaseNameFromCsv, ticketsFromCsv } from "../lib/golive";
 import { ManualGoliveDialog } from "./ManualGoliveDialog";
 import { CannotTestDialog } from "./CannotTestDialog";
+import { TestFailedDialog } from "./TestFailedDialog";
 import { PushToggle } from "./PushToggle";
 
 type Release = { id: string; name: string; source: string; fixVersion: string; createdBy: string; createdAt: string; completedAt: string | null; completedBy: string | null; ticketCount?: number };
 const MAX_HISTORY = 10;
 type Unfinished = { issueKey: string; summary: string; assignee: string };
-type Ticket = { id: number; releaseId: string; issueKey: string; summary: string; assignee: string; assigneeUserId: string | null; doneAt: string | null; skippedAt?: string | null; skippedBy?: string | null; skipKind?: string; skipReason?: string; skipNotified?: boolean };
+type Ticket = { id: number; releaseId: string; issueKey: string; summary: string; assignee: string; assigneeUserId: string | null; doneAt: string | null; skippedAt?: string | null; skippedBy?: string | null; skipKind?: string; skipReason?: string; skipNotified?: boolean; failedAt?: string | null; failedBy?: string | null; failedReason?: string };
 const REFRESH_MS = 60_000;
 type Person = { userId: string; displayName: string; avatar: string; role?: string };
 type SortKey = "issueKey" | "summary" | "assignee";
 type HeldDevice = { id: string; name: string; category: string };
 type DeviceCheck = { ticketId: number; deviceId: string; deviceName: string; checkedByUserId: string; checkedAt: string };
 
-const statusClass = (status: string) => "status-chip " + (status === "Done" ? "status-done" : "status-blocked");
+const statusClass = (status: string) => "status-chip " + (status === "Done" ? "status-done" : status === "Test Failed" ? "status-failed" : "status-blocked");
 const prettyTime = (iso: string) => new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Asia/Ho_Chi_Minh" }).format(new Date(iso));
 
 type GoliveData = { releases?: Release[]; releaseId?: string; tickets?: Ticket[]; devicesByUser?: Record<string, HeldDevice[]>; checks?: DeviceCheck[]; web?: WebPhase; error?: string };
@@ -44,6 +45,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
   const [confirm, confirmDialog] = useConfirm();
   const [creating, setCreating] = useState(false);
   const [cannotTest, setCannotTest] = useState<{ ticket: Ticket; editing: boolean } | null>(null);
+  const [failing, setFailing] = useState<{ ticket: Ticket; editing: boolean } | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const load = useCallback(async (id = "") => {
@@ -85,7 +87,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
 
   async function post(body: Record<string, unknown>) {
     const r = await fetch("/api/golive", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const data = await r.json() as { error?: string; releaseId?: string; count?: number; doneAt?: string | null; skippedAt?: string | null; skippedBy?: string | null; skipKind?: string; skipReason?: string; skipNotified?: boolean; release?: Release; unfinished?: Unfinished[]; web?: WebPhase; pending?: number };
+    const data = await r.json() as { error?: string; releaseId?: string; count?: number; doneAt?: string | null; skippedAt?: string | null; skippedBy?: string | null; skipKind?: string; skipReason?: string; skipNotified?: boolean; failedAt?: string | null; failedBy?: string | null; failedReason?: string; release?: Release; unfinished?: Unfinished[]; web?: WebPhase; pending?: number };
     if (!r.ok) throw Object.assign(new Error(data.error || "Không thể lưu thay đổi."), { unfinished: data.unfinished });
     return data;
   }
@@ -124,7 +126,31 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
 
   // "tested": the tester finished on borrowed devices; "not-needed": the ticket needs no test.
   const applySkip = (ticket: Ticket, result: Awaited<ReturnType<typeof post>>) =>
-    setTickets(current => current.map(item => item.id === ticket.id ? { ...item, doneAt: result.doneAt ?? null, skippedAt: result.skippedAt ?? null, skippedBy: result.skippedBy ?? null, skipKind: result.skipKind, skipReason: result.skipReason ?? "", skipNotified: !!result.skipNotified } : item));
+    setTickets(current => current.map(item => item.id === ticket.id ? { ...item, doneAt: result.doneAt ?? null, failedAt: result.failedAt ?? null, failedBy: result.failedBy ?? null, failedReason: result.failedReason ?? "", skippedAt: result.skippedAt ?? null, skippedBy: result.skippedBy ?? null, skipKind: result.skipKind, skipReason: result.skipReason ?? "", skipNotified: !!result.skipNotified } : item));
+
+  const applyFail = (ticket: Ticket, result: Awaited<ReturnType<typeof post>>) =>
+    setTickets(current => current.map(item => item.id === ticket.id ? { ...item, doneAt: result.doneAt ?? null, failedAt: result.failedAt ?? null, failedBy: result.failedBy ?? null, failedReason: result.failedReason ?? "", skippedAt: result.skippedAt ?? null, skippedBy: result.skippedBy ?? null, skipKind: result.skipKind, skipReason: result.skipReason, skipNotified: result.skipNotified } : item));
+
+  // "Test failed" records why, and leaves the ticket outstanding.
+  async function markFailed(reason: string) {
+    if (!failing) return;
+    const { ticket, editing } = failing;
+    setBusy(true);
+    try {
+      applyFail(ticket, await post({ action: "fail-test", ticketId: ticket.id, failed: true, reason }));
+      setFailing(null);
+      onToast(editing ? "Đã cập nhật lý do test failed cho " + ticket.issueKey : "Đã đánh dấu " + ticket.issueKey + " test failed");
+    } catch (e) { onError(e instanceof Error ? e.message : "Không thể cập nhật ticket."); } finally { setBusy(false); }
+  }
+
+  async function clearFailed(ticket: Ticket) {
+    if (!await confirm({ title: "Thu hồi test failed?", message: <>Ticket <strong>{ticket.issueKey}</strong> sẽ quay lại tính Done theo các máy đã tích.</>, confirmLabel: "Thu hồi" })) return;
+    setBusy(true);
+    try {
+      applyFail(ticket, await post({ action: "fail-test", ticketId: ticket.id, failed: false }));
+      onToast("Đã thu hồi test failed cho " + ticket.issueKey);
+    } catch (e) { onError(e instanceof Error ? e.message : "Không thể cập nhật ticket."); } finally { setBusy(false); }
+  }
 
   // "Không test được" asks for a reason in its own dialog instead of a plain confirm.
   async function markCannotTest(reason: string, notified: boolean) {
@@ -238,12 +264,22 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
         <button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => void setSkipped(ticket, false)}><Undo2 size={14} /> Thu hồi</button></span>}
     </div>;
   };
+  const failBadge = (ticket: Ticket) => <div className="golive-skipped golive-skipped-failed">
+    <span className="golive-skipped-label"><strong><XCircle size={16} aria-hidden="true" /> Test failed</strong>
+      {ticket.failedReason && <span className="golive-skip-reason">{ticket.failedReason}</span>}
+      {ticket.failedBy && <small>Đánh dấu bởi {ticket.failedBy}</small>}
+      {canSkip(ticket) && <small className="golive-fail-hint">Test lại xong thì chọn một trạng thái bên dưới.</small>}</span>
+    {canSkip(ticket) && <span className="golive-skipped-actions">
+      <button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => setFailing({ ticket, editing: true })}><Pencil size={14} /> Sửa</button>
+      <button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => void clearFailed(ticket)}><Undo2 size={14} /> Thu hồi</button></span>}
+  </div>;
   const isChecked = (ticket: Ticket, deviceId: string) => checks.some(item => item.ticketId === ticket.id && item.deviceId === deviceId);
   // Done is decided by the server and stays Done until a tick is removed.
   const fullyTested = (ticket: Ticket) => !!ticket.doneAt;
-  // Status is derived: Done once the tester has ticked every device on the ticket.
-  const statusOf = (ticket: Ticket) => fullyTested(ticket) ? "Done" : "In Progress";
-  const counts = (["In Progress", "Done"] as const).map(status => [status, tickets.filter(item => statusOf(item) === status).length] as const);
+  // Status is derived: Done once the tester has ticked every device on the ticket, and Test Failed
+  // while the tester has recorded a failure — which the server never lets be Done at the same time.
+  const statusOf = (ticket: Ticket) => ticket.failedAt ? "Test Failed" : fullyTested(ticket) ? "Done" : "In Progress";
+  const counts = (["In Progress", "Test Failed", "Done"] as const).map(status => [status, tickets.filter(item => statusOf(item) === status).length] as const);
   // Accent-insensitive, so "man hinh" finds "Màn hình".
   const fold = (value: string) => normalizeName(value).normalize("NFD").replace(/\p{M}/gu, "").replace(/đ/g, "d");
   const includes = (value: string, term: string) => fold(value).includes(fold(term));
@@ -359,15 +395,17 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
                 </label></li>;
               })}</ul>
             </div>;
-          })()}{canSkip(ticket) && !ticket.doneAt && <div className="golive-skip-actions">
+          })()}{ticket.failedAt && failBadge(ticket)}{canSkip(ticket) && !ticket.doneAt && <div className="golive-skip-actions">
             <button type="button" className="text-button golive-skip-button" disabled={busy} onClick={() => void setSkipped(ticket, true, "tested")}><CheckCircle2 size={14} /> Đã test xong</button>
             <button type="button" className="text-button golive-skip-button" disabled={busy} onClick={() => void setSkipped(ticket, true)}><Ban size={14} /> Không cần test</button>
             <button type="button" className="text-button golive-skip-button" disabled={busy} onClick={() => setCannotTest({ ticket, editing: false })}><CircleSlash size={14} /> Không test được</button>
+            {!ticket.failedAt && <button type="button" className="text-button golive-skip-button golive-fail-button" disabled={busy} onClick={() => setFailing({ ticket, editing: false })}><XCircle size={14} /> Test failed</button>}
           </div>}</>}</td>
         </tr>)}</tbody></table>{visible.length === 0 && <p className="empty">Không có {rowLabel} phù hợp.</p>}</div></section>
       </>}
       </>}
     {confirmDialog}
+    {failing && <TestFailedDialog key={failing.ticket.id} issueKey={failing.ticket.issueKey} editing={failing.editing} initialReason={failing.editing ? failing.ticket.failedReason || "" : ""} busy={busy} onCancel={() => setFailing(null)} onSubmit={reason => void markFailed(reason)} />}
     {cannotTest && <CannotTestDialog key={cannotTest.ticket.id} issueKey={cannotTest.ticket.issueKey} editing={cannotTest.editing} initialReason={cannotTest.editing ? cannotTest.ticket.skipReason || undefined : undefined} initialNotified={cannotTest.editing && !!cannotTest.ticket.skipNotified} busy={busy} onCancel={() => setCannotTest(null)} onSubmit={(reason, notified) => void markCannotTest(reason, notified)} />}
     {unfinished && <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setUnfinished(null); }} onKeyDown={e => { if (e.key === "Escape") setUnfinished(null); }}><div className="modal golive-warning" role="alertdialog" aria-modal="true" aria-labelledby="golive-warning-title">
       <div className="modal-head"><div className="golive-warning-head"><AlertTriangle size={22} /><div><h2 id="golive-warning-title">Chưa thể hoàn thành đợt golive</h2><p>Còn {unfinished.length} {rowLabel} chưa Done. Người test cần tích đủ các thiết bị đang cầm.</p></div></div><button className="icon-button" onClick={() => setUnfinished(null)} aria-label="Đóng"><X size={21} /></button></div>
