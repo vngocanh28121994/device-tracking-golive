@@ -702,6 +702,74 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
   .confirm-dialog .modal-actions button { width: 100%; }
 }
 
+/* Statistic: one collapsible card per golive, with the ticket report inside. */
+.stat-summary .golive-stat { cursor: default; gap: 6px; }
+.stat-summary .golive-stat:hover { border-color: var(--line); }
+.stat-summary .golive-stat small { font-size: 12px; color: var(--muted); }
+.stat-releases { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.stat-release { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
+.stat-release.is-open { border-color: #d6c8ea; }
+.stat-release-head { width: 100%; display: flex; align-items: center; gap: 14px; padding: 14px 18px; background: none; border: 0; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.stat-release-head:hover { background: #fcfaff; }
+.stat-release-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.stat-release-icon { width: 38px; height: 38px; flex: 0 0 38px; border-radius: 10px; display: grid; place-items: center; background: var(--lavender); color: var(--accent); }
+.stat-release-icon.done { background: #e9f5ee; color: #28715d; }
+.stat-release-main { flex: 1 1 220px; min-width: 0; display: grid; gap: 4px; }
+.stat-release-main strong { font-size: 14px; font-weight: 650; overflow-wrap: anywhere; }
+.stat-release-main small { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.stat-release-head .golive-version { flex: 0 0 auto; }
+.stat-release-progress { flex: 0 0 150px; display: grid; gap: 6px; justify-items: end; }
+.stat-release-progress small { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.stat-bar { width: 100%; height: 6px; border-radius: 999px; background: #efeaf6; overflow: hidden; }
+.stat-bar-fill { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
+.stat-bar-fill.full { background: #2f8a6f; }
+.stat-chevron { flex: 0 0 auto; color: var(--muted); transition: transform .18s ease; }
+.stat-release.is-open .stat-chevron { transform: rotate(180deg); }
+.stat-release-body { border-top: 1px solid var(--line); }
+.stat-selection { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 12px 18px; font-size: 13px; color: var(--muted); background: #fbf9fd; }
+.stat-selection span { display: inline-flex; align-items: center; gap: 7px; }
+.stat-selection strong { color: var(--accent); font-size: 14px; font-variant-numeric: tabular-nums; }
+.stat-clear { min-height: 36px; padding: 7px 12px; font-size: 12px; gap: 6px; }
+.stat-table th:first-child, .stat-table td:first-child { padding-right: 0; }
+/* The report's last column holds a timestamp, not an action, so it keeps the text column width. */
+.stat-table th:last-child, .stat-table td:last-child { text-align: left; width: auto; }
+.stat-pick { width: 46px; text-align: center; }
+.stat-pick input { width: 17px; height: 17px; accent-color: var(--accent); cursor: pointer; }
+.stat-pick input:disabled { cursor: not-allowed; opacity: .45; }
+.stat-row-check { color: #2f8a6f; vertical-align: middle; }
+.stat-table tr.stat-row-picked { background: var(--lavender); }
+.stat-table tr.stat-row-done { background: #f6fbf8; }
+.stat-done-at { min-width: 200px; }
+.stat-done-stamp { display: grid; gap: 3px; }
+.stat-done-stamp strong { font-size: 13px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.stat-done-stamp small { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.stat-release-body .empty { padding: 28px 20px; }
+@media (max-width: 900px) {
+  /* Three lines of copy per card, so these stay stacked where a golive stat goes side by side. */
+  .stat-summary .golive-stat { flex-direction: column; align-items: flex-start; justify-content: flex-start; }
+  .stat-release-head { flex-wrap: wrap; }
+  .stat-release-main { flex: 1 1 100%; order: 1; }
+  .stat-release-icon { order: 0; }
+  .stat-chevron { order: 0; margin-left: auto; }
+  .stat-release-progress { flex: 1 1 100%; order: 2; justify-items: stretch; }
+  .stat-release-progress small { text-align: right; }
+  .stat-table thead { display: none; }
+  .stat-table { display: block; min-width: 0; width: 100%; }
+  .stat-release-body .table-scroll { overflow: visible; }
+  .stat-table tbody { display: grid; gap: 10px; padding: 12px; }
+  .stat-table tbody tr { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+  .stat-table td { display: block; border: 0; padding: 0; text-align: left; width: auto; }
+  .stat-table .stat-pick { grid-column: 1; grid-row: 1; width: auto; align-self: center; }
+  .stat-table .golive-key { grid-column: 2; grid-row: 1; align-self: center; white-space: normal; overflow-wrap: anywhere; font-size: 14px; }
+  .stat-table .golive-ticket-status { grid-column: 3; grid-row: 1; align-self: center; justify-self: end; }
+  .stat-table .golive-summary { grid-column: 1 / -1; grid-row: 2; font-size: 15px; line-height: 1.55; }
+  .stat-table .golive-assignee { grid-column: 1 / -1; grid-row: 3; }
+  .stat-table .stat-done-at { grid-column: 1 / -1; grid-row: 4; min-width: 0; padding-top: 10px; border-top: 1px solid var(--line); }
+  /* A manual golive has no ticket key, so the tester name takes the first row. */
+  .stat-table tbody tr:not(:has(.golive-key)) .golive-assignee { grid-column: 2; grid-row: 1; align-self: center; }
+  .stat-table .stat-pick input { width: 22px; height: 22px; }
+}
+
 /* dark-theme:generated:start */
 /* Generated by scripts/generate-dark-theme.py; edit the light rules or the hand-tuned rules after this block, then rerun. */
 :root[data-theme="dark"] /* Dark theme tokens. Literal colours elsewhere get dark counterparts in the generated block at the end. */
@@ -815,6 +883,13 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 }
 :root[data-theme="dark"] .confirm-dialog::backdrop { background: #14101a70; }
 :root[data-theme="dark"] .confirm-danger .confirm-icon { background: #4c1d1d; color: #e6a9b0; }
+:root[data-theme="dark"] .stat-release.is-open { border-color: #453857; }
+:root[data-theme="dark"] .stat-release-head:hover { background: #291942; }
+:root[data-theme="dark"] .stat-release-icon.done { background: #2e4638; color: #bae6da; }
+:root[data-theme="dark"] .stat-bar { background: #372c45; }
+:root[data-theme="dark"] .stat-selection { background: #2f223c; }
+:root[data-theme="dark"] .stat-row-check { color: #b2e5d6; }
+:root[data-theme="dark"] .stat-table tr.stat-row-done { background: #273c2f; }
 /* dark-theme:generated:end */
 /* Hand-tuned dark rules: these win over the generated block above. */
 :root[data-theme="dark"] .filter-tabs { background: #0f0c13; border: 1px solid var(--line); }
