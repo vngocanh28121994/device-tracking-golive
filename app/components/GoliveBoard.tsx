@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, History, CheckCircle2, ArrowUp, ArrowUpDown, Check, FileUp, Laptop, ListFilter, MoreHorizontal, Plus, Rocket, Search, Smartphone, Tablet, Trash2, X } from "lucide-react";
 import { StyledSelect } from "./StyledSelect";
 import { HolderIdentity } from "./HolderIdentity";
-import { ImportedTicket, normalizeName, ticketsFromCsv } from "../lib/golive";
+import { ImportedTicket, normalizeName, releaseNameFromCsv, ticketsFromCsv } from "../lib/golive";
 import { ManualGoliveDialog } from "./ManualGoliveDialog";
 
 type Release = { id: string; name: string; source: string; fixVersion: string; createdBy: string; createdAt: string; completedAt: string | null; completedBy: string | null; ticketCount?: number };
@@ -64,9 +64,10 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
   async function pickFile(file: File | undefined) {
     if (!file) return;
     try {
-      const parsed = ticketsFromCsv(await file.text());
+      const text = await file.text();
+      const parsed = ticketsFromCsv(text);
       if (parsed.length === 0) throw new Error("Không tìm thấy ticket nào có Issue Key trong file.");
-      setPending({ fileName: file.name, tickets: parsed }); setReleaseName(file.name.replace(/\.csv$/i, ""));
+      setPending({ fileName: file.name, tickets: parsed }); setReleaseName(releaseNameFromCsv(text) || file.name.replace(/\.csv$/i, ""));
     } catch (e) { onError(e instanceof Error ? e.message : "Không đọc được file CSV."); }
     finally { if (fileInput.current) fileInput.current.value = ""; }
   }

@@ -45,3 +45,11 @@ export function ticketsFromCsv(text: string): ImportedTicket[] {
     assignee: testerIndex < 0 ? "" : (cells[testerIndex] || "").trim(),
   })).filter(ticket => ticket.issueKey && !seen.has(ticket.issueKey) && seen.add(ticket.issueKey));
 }
+
+// Every ticket in a golive export shares one Fix Version, so the first non-empty value names the release.
+export function releaseNameFromCsv(text: string): string {
+  const [header, ...rows] = parseCsv(text);
+  const index = (header || []).findIndex(cell => ["fix versions", "fix version", "fix version/s"].includes(cell.trim().toLowerCase()));
+  if (index < 0) return "";
+  return rows.map(cells => (cells[index] || "").trim()).find(Boolean) || "";
+}
