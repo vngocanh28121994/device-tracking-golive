@@ -1,0 +1,1 @@
+ALTER TABLE `golive_tickets` ADD `skip_kind` text DEFAULT 'not-needed' NOT NULL;

@@ -171,7 +171,7 @@ export async function POST(request: Request) {
       const tester = ticket.assigneeUserId ?? (ticket.assignee ? matchAccount(profiles, ticket.assignee) : null);
       if (tester !== user.userId) return error("Chỉ người test của ticket này mới được tích checklist.", 403);
       if (completedAt) return error("Đợt golive đã hoàn thành, không thể sửa checklist.", 409);
-      if (ticket.skippedAt) return error("Ticket đã được đánh dấu không cần test. Hãy thu hồi trước khi tích checklist.", 409);
+      if (ticket.skippedAt) return error("Ticket đã được đánh dấu Done thủ công. Hãy thu hồi trước khi tích checklist.", 409);
       if (body.checked === false) {
         await db.batch([
           db.delete(goliveDeviceChecks).where(and(eq(goliveDeviceChecks.ticketId, ticketId), eq(goliveDeviceChecks.deviceId, deviceId))),
@@ -187,7 +187,7 @@ export async function POST(request: Request) {
       return Response.json({ doneAt: tickets[0]?.doneAt ?? null, recorded });
     }
     if (body.action === "skip-test") {
-      const ticketId = Number(body.ticketId), skipped = body.skipped !== false;
+      const ticketId = Number(body.ticketId), skipped = body.skipped !== false, kind = body.kind === "tested" ? "tested" : "not-needed";
       const [[found], profiles] = await Promise.all([
         ticketWithRelease(db, ticketId),
         db.select({ userId: userProfiles.userId, displayName: userProfiles.displayName, role: userProfiles.role }).from(userProfiles),
@@ -196,14 +196,14 @@ export async function POST(request: Request) {
       const { ticket, completedAt } = found;
       const me = profiles.find(item => item.userId === user.userId);
       const tester = ticket.assigneeUserId ?? (ticket.assignee ? matchAccount(profiles, ticket.assignee) : null);
-      if (tester !== user.userId && me?.role !== "Manager") return error("Chỉ người test của ticket hoặc Manager mới được đánh dấu không cần test.", 403);
+      if (tester !== user.userId && me?.role !== "Manager") return error("Chỉ người test của ticket hoặc Manager mới được đánh dấu ticket.", 403);
       if (completedAt) return error("Đợt golive đã hoàn thành, không thể sửa.", 409);
       const by = me?.displayName || user.displayName || user.email;
       // Undoing clears Done too; the next load marks it Done again if every device is already ticked.
-      await db.update(goliveTickets).set(skipped ? { skippedAt: now, skippedBy: by, doneAt: now } : { skippedAt: null, skippedBy: null, doneAt: null }).where(eq(goliveTickets.id, ticketId));
+      await db.update(goliveTickets).set(skipped ? { skippedAt: now, skippedBy: by, skipKind: kind, doneAt: now } : { skippedAt: null, skippedBy: null, skipKind: "not-needed", doneAt: null }).where(eq(goliveTickets.id, ticketId));
       const { tickets, recorded } = await loadRelease(db, ticket.releaseId, now, ticketId);
       const updated = tickets[0];
-      return Response.json({ doneAt: updated?.doneAt ?? null, skippedAt: updated?.skippedAt ?? null, skippedBy: updated?.skippedBy ?? null, recorded });
+      return Response.json({ doneAt: updated?.doneAt ?? null, skippedAt: updated?.skippedAt ?? null, skippedBy: updated?.skippedBy ?? null, skipKind: updated?.skipKind ?? "not-needed", recorded });
     }
     if (body.action === "complete-release") {
       const releaseId = clean(body.releaseId, 60);

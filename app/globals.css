@@ -621,10 +621,11 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 .golive-skipped-label strong { display: inline-flex; align-items: center; gap: 7px; font-weight: 650; }
 .golive-skipped-label small { color: var(--muted); font-size: 12px; padding-left: 23px; overflow-wrap: anywhere; }
 .golive-skip-button { font-size: 12px; }
-.golive-devices > .golive-skip-button { display: flex; margin-top: 4px; padding-left: 0; min-height: 32px; white-space: nowrap; }
+.golive-skip-actions { display: flex; flex-wrap: wrap; column-gap: 16px; margin-top: 4px; }
+.golive-skip-actions .golive-skip-button { padding-left: 0; min-height: 32px; white-space: nowrap; }
 .golive-skipped .golive-skip-button { min-height: 32px; padding: 4px 10px; }
 @media (max-width: 900px) {
   .golive-skipped { flex-direction: row; align-items: center; justify-content: space-between; }
-  .golive-skipped .golive-skip-button, .golive-devices > .golive-skip-button { min-height: 44px; }
+  .golive-skipped .golive-skip-button, .golive-skip-actions .golive-skip-button { min-height: 44px; }
   .golive-skipped .golive-skip-button { padding: 8px 14px; flex: none; }
 }

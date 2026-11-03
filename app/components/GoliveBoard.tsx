@@ -10,7 +10,7 @@ import { ManualGoliveDialog } from "./ManualGoliveDialog";
 type Release = { id: string; name: string; source: string; fixVersion: string; createdBy: string; createdAt: string; completedAt: string | null; completedBy: string | null; ticketCount?: number };
 const MAX_HISTORY = 10;
 type Unfinished = { issueKey: string; summary: string; assignee: string };
-type Ticket = { id: number; releaseId: string; issueKey: string; summary: string; assignee: string; assigneeUserId: string | null; doneAt: string | null; skippedAt?: string | null; skippedBy?: string | null };
+type Ticket = { id: number; releaseId: string; issueKey: string; summary: string; assignee: string; assigneeUserId: string | null; doneAt: string | null; skippedAt?: string | null; skippedBy?: string | null; skipKind?: string };
 type RecordedDevice = { ticketId: number; deviceId: string; deviceName: string };
 const REFRESH_MS = 60_000;
 type Person = { userId: string; displayName: string; avatar: string; role?: string };
@@ -63,7 +63,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
 
   async function post(body: Record<string, unknown>) {
     const r = await fetch("/api/golive", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const data = await r.json() as { error?: string; releaseId?: string; count?: number; doneAt?: string | null; skippedAt?: string | null; skippedBy?: string | null; recorded?: RecordedDevice[]; release?: Release; unfinished?: Unfinished[] };
+    const data = await r.json() as { error?: string; releaseId?: string; count?: number; doneAt?: string | null; skippedAt?: string | null; skippedBy?: string | null; skipKind?: string; recorded?: RecordedDevice[]; release?: Release; unfinished?: Unfinished[] };
     if (!r.ok) throw Object.assign(new Error(data.error || "Không thể lưu thay đổi."), { unfinished: data.unfinished });
     return data;
   }
@@ -101,17 +101,20 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
     catch (e) { setChecks(previous); onError(e instanceof Error ? e.message : "Không thể cập nhật checklist."); }
   }
 
-  async function setSkipped(ticket: Ticket, skipped: boolean) {
-    const question = skipped
-      ? "Đánh dấu “" + ticket.issueKey + "” là không cần test? Ticket sẽ chuyển sang Done ngay."
-      : "Thu hồi đánh dấu không cần test cho “" + ticket.issueKey + "”? Ticket sẽ quay lại checklist thiết bị.";
+  // "tested": the tester finished on borrowed devices; "not-needed": the ticket needs no test.
+  async function setSkipped(ticket: Ticket, skipped: boolean, kind: "tested" | "not-needed" = "not-needed") {
+    const question = !skipped
+      ? "Thu hồi đánh dấu cho “" + ticket.issueKey + "”? Ticket sẽ quay lại checklist thiết bị."
+      : kind === "tested"
+        ? "Xác nhận đã test xong “" + ticket.issueKey + "” (kể cả trên máy mượn)? Ticket sẽ chuyển sang Done dù chưa tích đủ máy."
+        : "Đánh dấu “" + ticket.issueKey + "” là không cần test? Ticket sẽ chuyển sang Done ngay.";
     if (!window.confirm(question)) return;
     setBusy(true);
     try {
-      const result = await post({ action: "skip-test", ticketId: ticket.id, skipped });
-      setTickets(current => current.map(item => item.id === ticket.id ? { ...item, doneAt: result.doneAt ?? null, skippedAt: result.skippedAt ?? null, skippedBy: result.skippedBy ?? null } : item));
+      const result = await post({ action: "skip-test", ticketId: ticket.id, skipped, kind });
+      setTickets(current => current.map(item => item.id === ticket.id ? { ...item, doneAt: result.doneAt ?? null, skippedAt: result.skippedAt ?? null, skippedBy: result.skippedBy ?? null, skipKind: result.skipKind } : item));
       if (result.recorded) setRecorded(current => [...current.filter(item => item.ticketId !== ticket.id), ...result.recorded!]);
-      onToast(skipped ? "Đã đánh dấu " + ticket.issueKey + " không cần test" : "Đã thu hồi đánh dấu cho " + ticket.issueKey);
+      onToast(!skipped ? "Đã thu hồi đánh dấu cho " + ticket.issueKey : kind === "tested" ? "Đã xác nhận test xong " + ticket.issueKey : "Đã đánh dấu " + ticket.issueKey + " không cần test");
     } catch (e) { onError(e instanceof Error ? e.message : "Không thể cập nhật ticket."); } finally { setBusy(false); }
   }
 
@@ -256,7 +259,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
           <td className="golive-summary">{ticket.summary || <span className="muted">(không có tên)</span>}</td></>}
           <td className="golive-assignee">{ticket.assignee ? <HolderIdentity name={ticket.assignee} avatar={people.find(person => person.userId === ticket.assigneeUserId)?.avatar || ""} role={people.find(person => person.userId === ticket.assigneeUserId)?.role} /> : <span className="muted">Chưa có người test</span>}</td>
           <td className="golive-ticket-status"><span className={statusClass(statusOf(ticket))}>{statusOf(ticket)}</span></td>
-          <td className="golive-devices">{ticket.skippedAt ? <div className="golive-skipped"><span className="golive-skipped-label"><strong><Ban size={16} aria-hidden="true" /> Không cần test</strong>{ticket.skippedBy && <small>Đánh dấu bởi {ticket.skippedBy}</small>}</span>{canSkip(ticket) && <button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => void setSkipped(ticket, false)}><Undo2 size={14} /> Thu hồi</button>}</div> : <>{!ticket.assignee ? <span className="muted">Chưa có người test</span> : !ticket.assigneeUserId ? <span className="muted">“{ticket.assignee}” chưa khớp tài khoản nào</span> : (() => {
+          <td className="golive-devices">{ticket.skippedAt ? <div className="golive-skipped"><span className="golive-skipped-label"><strong>{ticket.skipKind === "tested" ? <><CheckCircle2 size={16} aria-hidden="true" /> Đã test xong</> : <><Ban size={16} aria-hidden="true" /> Không cần test</>}</strong>{ticket.skippedBy && <small>{ticket.skipKind === "tested" ? "Xác nhận" : "Đánh dấu"} bởi {ticket.skippedBy}</small>}</span>{canSkip(ticket) && <button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => void setSkipped(ticket, false)}><Undo2 size={14} /> Thu hồi</button>}</div> : <>{!ticket.assignee ? <span className="muted">Chưa có người test</span> : !ticket.assigneeUserId ? <span className="muted">“{ticket.assignee}” chưa khớp tài khoản nào</span> : (() => {
             const list = ticketDevices(ticket), mine = ticket.assigneeUserId === currentUserId && !current?.completedAt && !ticket.skippedAt;
             if (list.length === 0) return <span className="muted">Người test chưa cầm thiết bị nào</span>;
             return <div className="golive-device-group">
@@ -273,7 +276,10 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
                 </label></li>;
               })}</ul>
             </div>;
-          })()}{canSkip(ticket) && !ticket.doneAt && <button type="button" className="text-button golive-skip-button" disabled={busy} onClick={() => void setSkipped(ticket, true)}><Ban size={14} /> Không cần test</button>}</>}</td>
+          })()}{canSkip(ticket) && !ticket.doneAt && <div className="golive-skip-actions">
+            <button type="button" className="text-button golive-skip-button" disabled={busy} onClick={() => void setSkipped(ticket, true, "tested")}><CheckCircle2 size={14} /> Đã test xong</button>
+            <button type="button" className="text-button golive-skip-button" disabled={busy} onClick={() => void setSkipped(ticket, true)}><Ban size={14} /> Không cần test</button>
+          </div>}</>}</td>
         </tr>)}</tbody></table>{visible.length === 0 && <p className="empty">Không có {rowLabel} phù hợp.</p>}</div></section>
       </>}
       </>}
