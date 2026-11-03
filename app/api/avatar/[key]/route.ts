@@ -11,8 +11,9 @@ export async function GET(_request: Request, context: { params: Promise<{ key: s
   try {
     const [profile] = await getDb().select({ id: userProfiles.userId }).from(userProfiles).where(eq(userProfiles.avatarKey, key)).limit(1);
     if (!profile) return new Response(null, { status: 404 });
+    // Every upload gets a new key, so a fetched photo never changes.
     const photo = await env.BUCKET?.get("avatars/" + key);
     if (!photo) return new Response(null, { status: 404 });
-    return new Response(photo.body, { headers: { "Content-Type": "image/jpeg", "Cache-Control": "private, no-cache", "X-Content-Type-Options": "nosniff" } });
+    return new Response(photo.body, { headers: { "Content-Type": "image/jpeg", "Cache-Control": "private, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff" } });
   } catch { return new Response(null, { status: 500 }); }
 }
