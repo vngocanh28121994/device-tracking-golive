@@ -1,11 +1,12 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, History, CheckCircle2, ArrowUp, ArrowUpDown, Check, FileUp, Laptop, Rocket, Search, Smartphone, Tablet, Trash2, X } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, History, CheckCircle2, ArrowUp, ArrowUpDown, Check, FileUp, Laptop, Plus, Rocket, Search, Smartphone, Tablet, Trash2, X } from "lucide-react";
 import { StyledSelect } from "./StyledSelect";
 import { HolderIdentity } from "./HolderIdentity";
 import { ImportedTicket, normalizeName, ticketsFromCsv } from "../lib/golive";
+import { ManualGoliveDialog } from "./ManualGoliveDialog";
 
-type Release = { id: string; name: string; createdBy: string; createdAt: string; completedAt: string | null; completedBy: string | null; ticketCount?: number };
+type Release = { id: string; name: string; source: string; fixVersion: string; createdBy: string; createdAt: string; completedAt: string | null; completedBy: string | null; ticketCount?: number };
 const MAX_HISTORY = 10;
 type Unfinished = { issueKey: string; summary: string; assignee: string };
 type Ticket = { id: number; releaseId: string; issueKey: string; summary: string; assignee: string; assigneeUserId: string | null; doneAt: string | null };
@@ -19,7 +20,7 @@ type DeviceCheck = { ticketId: number; deviceId: string; deviceName: string; che
 const statusClass = (status: string) => "status-chip " + (status === "Done" ? "status-done" : "status-blocked");
 const prettyTime = (iso: string) => new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Asia/Ho_Chi_Minh" }).format(new Date(iso));
 
-export function GoliveBoard({ people, currentUserId, onError, onToast }: { people: Person[]; currentUserId: string; onError: (message: string) => void; onToast: (message: string) => void }) {
+export function GoliveBoard({ people, currentUserId, onError, onToast, onManageRoles }: { people: Person[]; currentUserId: string; onError: (message: string) => void; onToast: (message: string) => void; onManageRoles: () => void }) {
   const [releases, setReleases] = useState<Release[]>([]), [releaseId, setReleaseId] = useState(""), [tickets, setTickets] = useState<Ticket[]>([]);
   const [devicesByUser, setDevicesByUser] = useState<Record<string, HeldDevice[]>>({}), [checks, setChecks] = useState<DeviceCheck[]>([]), [recorded, setRecorded] = useState<RecordedDevice[]>([]), [mineOnly, setMineOnly] = useState(false);
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [view, setView] = useState<"active" | "history">("active");
@@ -29,6 +30,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast }: { peopl
   const [keyFilter, setKeyFilter] = useState(""), [summaryFilter, setSummaryFilter] = useState(""), [testerFilter, setTesterFilter] = useState("__all__");
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 } | null>({ key: "assignee", dir: 1 });
   const fileInput = useRef<HTMLInputElement>(null);
+  const [creating, setCreating] = useState(false);
 
   const load = useCallback(async (id = "") => {
     try {
@@ -111,7 +113,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast }: { peopl
 
   async function deleteRelease() {
     const release = releases.find(item => item.id === releaseId);
-    if (!release || !window.confirm((release.completedAt ? "Xoá bản lưu của đợt golive" : "Xoá đợt golive") + " “" + release.name + "” cùng " + tickets.length + " ticket?")) return;
+    if (!release || !window.confirm((release.completedAt ? "Xoá bản lưu của đợt golive" : "Xoá đợt golive") + " “" + release.name + "” cùng " + tickets.length + (release.source === "manual" ? " checklist QE?" : " ticket?"))) return;
     setBusy(true);
     try { await post({ action: "delete-release", releaseId }); onToast("Đã xoá đợt golive."); resetFilters(); await load(); }
     catch (e) { onError(e instanceof Error ? e.message : "Không thể xoá."); } finally { setBusy(false); }
@@ -119,6 +121,8 @@ export function GoliveBoard({ people, currentUserId, onError, onToast }: { peopl
 
   // Devices the tester holds now, plus any already ticked device they have since handed over.
   const current = releases.find(item => item.id === releaseId);
+  const manual = current?.source === "manual";
+  const rowLabel = manual ? "người test" : "ticket";
   const active = releases.filter(item => !item.completedAt);
   const history = releases.filter(item => item.completedAt).sort((a, b) => b.completedAt!.localeCompare(a.completedAt!));
   const showHistoryList = view === "history" && !current?.completedAt;
@@ -155,8 +159,8 @@ export function GoliveBoard({ people, currentUserId, onError, onToast }: { peopl
   const projects = useMemo(() => Array.from(new Set(tickets.map(item => item.issueKey.split("-")[0]))).sort(), [tickets]);
   const testerOptions = useMemo(() => {
     const names = Array.from(new Set(tickets.map(item => item.assignee))).sort((a, b) => (a ? 0 : 1) - (b ? 0 : 1) || a.localeCompare(b, "vi"));
-    return [{ value: "__all__", label: "Tất cả người test", description: tickets.length + " ticket" }, ...names.map(name => ({ value: name, label: name || "Chưa có người test", description: tickets.filter(item => item.assignee === name).length + " ticket", avatar: people.find(person => person.userId === tickets.find(item => item.assignee === name)?.assigneeUserId)?.avatar }))];
-  }, [tickets, people]);
+    return [{ value: "__all__", label: "Tất cả người test", description: tickets.length + " " + rowLabel }, ...names.map(name => ({ value: name, label: name || "Chưa có người test", description: tickets.filter(item => item.assignee === name).length + (manual ? " checklist" : " ticket"), avatar: people.find(person => person.userId === tickets.find(item => item.assignee === name)?.assigneeUserId)?.avatar }))];
+  }, [tickets, people, rowLabel, manual]);
   const visible = useMemo(() => {
     const rows = tickets.filter(item => includes(item.issueKey + " " + item.summary + " " + item.assignee, query)
       && (!keyFilter || (projects.includes(keyFilter) ? item.issueKey.startsWith(keyFilter + "-") : includes(item.issueKey, keyFilter)))
@@ -176,8 +180,8 @@ export function GoliveBoard({ people, currentUserId, onError, onToast }: { peopl
   const done = tickets.filter(fullyTested).length;
 
   return <>
-    <div className="page-heading"><div><h1>Tracking Golive.</h1><p>Import ticket từ Jira (Issue Key, Summary, Quality Engineer). Người test tích vào từng thiết bị đang cầm khi đã test xong ticket.</p></div>
-      <button className="primary-button" onClick={() => fileInput.current?.click()}><FileUp size={18} /> Import CSV</button>
+    <div className="page-heading"><div><h1>Tracking Golive.</h1><p>Tạo đợt golive cho team QE hoặc import ticket từ Jira. Người test xác nhận trên từng thiết bị đang cầm.</p></div>
+      <div className="golive-heading-actions"><button className="outline-button" onClick={() => fileInput.current?.click()}><FileUp size={18} /> Import CSV</button><button className="primary-button" onClick={() => setCreating(true)}><Plus size={18} /> Tạo đợt golive</button></div>
       <input ref={fileInput} type="file" accept=".csv,text/csv" hidden onChange={e => void pickFile(e.target.files?.[0])} /></div>
     {loading ? <div className="loading" role="status"><div className="loading-bars"><span /><span /><span /></div>Đang tải đợt golive...</div>
       : <>
@@ -185,33 +189,34 @@ export function GoliveBoard({ people, currentUserId, onError, onToast }: { peopl
           <button role="tab" aria-selected={view === "active"} className={view === "active" ? "active" : ""} onClick={() => switchView("active")}>Đang thực hiện ({active.length})</button>
           <button role="tab" aria-selected={view === "history"} className={view === "history" ? "active" : ""} onClick={() => switchView("history")}><History size={15} /> Lịch sử golive ({history.length}/{MAX_HISTORY})</button>
         </div>
-        {view === "active" && active.length === 0 && <section className="panel golive-empty"><Rocket size={34} /><h2>Chưa có đợt golive nào đang thực hiện</h2><p>Xuất danh sách ticket từ Jira ra CSV rồi nhấn “Import CSV” để bắt đầu.</p><button className="primary-button" onClick={() => fileInput.current?.click()}><FileUp size={18} /> Chọn file CSV</button></section>}
+        {view === "active" && active.length === 0 && <section className="panel golive-empty"><Rocket size={34} /><h2>Chưa có đợt golive nào đang thực hiện</h2><p>Tạo đợt golive bằng tên và fixVersion, hoặc import danh sách ticket từ Jira.</p><button className="primary-button" onClick={() => setCreating(true)}><Plus size={18} /> Tạo đợt golive</button></section>}
         {showHistoryList && (history.length === 0 ? <section className="panel golive-empty"><History size={34} /><h2>Chưa có đợt golive nào hoàn thành</h2><p>Các đợt đã hoàn thành được lưu ở đây, tối đa {MAX_HISTORY} đợt gần nhất.</p></section>
           : <><p className="golive-history-note">Lưu tối đa {MAX_HISTORY} đợt golive hoàn thành gần nhất. Khi hoàn thành đợt mới, đợt cũ nhất sẽ tự xoá.</p>
             <ul className="golive-history">{history.map(item => <li key={item.id}><button type="button" onClick={() => openRelease(item.id)}>
               <span className="golive-history-icon"><CheckCircle2 size={20} /></span>
               <span className="golive-history-main"><strong>{item.name}</strong><small>Hoàn thành {prettyTime(item.completedAt!)}{item.completedBy ? " · " + item.completedBy : ""}</small></span>
-              <span className="golive-history-count">{item.ticketCount ?? 0} ticket</span><ArrowRight size={17} /></button></li>)}</ul></>)}
+              <span className="golive-history-count">{item.ticketCount ?? 0} {item.source === "manual" ? "QE" : "ticket"}{item.fixVersion && <small className="golive-version">{item.fixVersion}</small>}</span><ArrowRight size={17} /></button></li>)}</ul></>)}
         {showDetail && current && <>
         <div className="golive-release-bar">
           {current.completedAt ? <><button type="button" className="outline-button golive-back" onClick={() => setReleaseId("")}><ArrowLeft size={16} /> Lịch sử</button><h2 className="golive-release-title">{current.name}</h2></>
             : <div className="golive-release-select"><StyledSelect ariaLabel="Chọn đợt golive" value={releaseId} onChange={openRelease} options={active.map(item => ({ value: item.id, label: item.name, description: prettyTime(item.createdAt) + " · " + item.createdBy }))} placeholder="Chọn đợt golive" /></div>}
-          {current && <span className="golive-progress"><strong>{done}/{tickets.length}</strong> ticket đã test xong trên mọi thiết bị</span>}
+          {current.fixVersion && <span className="golive-version">fixVersion: <strong>{current.fixVersion}</strong></span>}
+          {current && <span className="golive-progress"><strong>{done}/{tickets.length}</strong> {rowLabel} đã test xong trên mọi thiết bị</span>}
           {current?.completedAt ? <span className="golive-completed"><CheckCircle2 size={16} /> Đã hoàn thành {prettyTime(current.completedAt)}{current.completedBy ? " · " + current.completedBy : ""}</span>
             : <button className="primary-button golive-complete" disabled={busy} onClick={() => void completeRelease()}><CheckCircle2 size={17} /> Hoàn thành đợt golive</button>}
           <button className="outline-button golive-delete" disabled={busy} onClick={() => void deleteRelease()}><Trash2 size={16} /> Xoá đợt golive</button>
         </div>
         <div className="golive-stats">{counts.map(([status, count]) => <button key={status} className={"golive-stat " + (statusFilter === status ? "active" : "")} aria-pressed={statusFilter === status} onClick={() => setStatusFilter(statusFilter === status ? "__all__" : status)}><span className={statusClass(status)}>{status}</span><strong>{count}</strong></button>)}</div>
         <div className="golive-filters">
-          <label>MÃ<input list="golive-projects" value={keyFilter} onChange={e => setKeyFilter(e.target.value.trim().toUpperCase())} placeholder="VD: DIP hoặc DIP-2313" /><datalist id="golive-projects">{projects.map(project => <option key={project} value={project} />)}</datalist></label>
-          <label>TÊN TICKET<input value={summaryFilter} onChange={e => setSummaryFilter(e.target.value)} placeholder="Chứa từ khoá..." /></label>
+          {!manual && <><label>MÃ<input list="golive-projects" value={keyFilter} onChange={e => setKeyFilter(e.target.value.trim().toUpperCase())} placeholder="VD: DIP hoặc DIP-2313" /><datalist id="golive-projects">{projects.map(project => <option key={project} value={project} />)}</datalist></label>
+          <label>TÊN TICKET<input value={summaryFilter} onChange={e => setSummaryFilter(e.target.value)} placeholder="Chứa từ khoá..." /></label></>}
           <label>NGƯỜI TEST<StyledSelect ariaLabel="Lọc theo người test" value={testerFilter} onChange={setTesterFilter} options={testerOptions} placeholder="Tất cả người test" /></label>
           {filtered && <button type="button" className="outline-button golive-clear" onClick={() => { resetFilters(); setMineOnly(false); }}><X size={15} /> Xoá lọc</button>}
         </div>
-        <div className="inventory-toolbar"><div className="search"><Search size={19} /><input aria-label="Tìm ticket" value={query} onChange={e => setQuery(e.target.value)} placeholder="Tìm mã, tên ticket, người test..." /></div><label className="golive-mine"><input type="checkbox" checked={mineOnly} onChange={e => setMineOnly(e.target.checked)} /> Chỉ ticket của tôi</label><span>{visible.length} ticket</span></div>
-        <section className="panel table-panel"><div className="table-scroll"><table className="golive-table"><thead><tr>{sortHeader("issueKey", "MÃ")}{sortHeader("summary", "TÊN TICKET")}{sortHeader("assignee", "NGƯỜI TEST")}<th>TRẠNG THÁI</th><th>THIẾT BỊ ĐÃ TEST</th></tr></thead><tbody>{visible.map(ticket => <tr key={ticket.id}>
-          <td className="golive-key">{ticket.issueKey}</td>
-          <td className="golive-summary">{ticket.summary || <span className="muted">(không có tên)</span>}</td>
+        <div className="inventory-toolbar"><div className="search"><Search size={19} /><input aria-label={manual ? "Tìm người test" : "Tìm ticket"} value={query} onChange={e => setQuery(e.target.value)} placeholder={manual ? "Tìm người test..." : "Tìm mã, tên ticket, người test..."} /></div><label className="golive-mine"><input type="checkbox" checked={mineOnly} onChange={e => setMineOnly(e.target.checked)} /> {manual ? "Chỉ checklist của tôi" : "Chỉ ticket của tôi"}</label><span>{visible.length} {rowLabel}</span></div>
+        <section className="panel table-panel"><div className="table-scroll"><table className={"golive-table" + (manual ? " golive-manual-table" : "")}><thead><tr>{!manual && <>{sortHeader("issueKey", "MÃ")}{sortHeader("summary", "TÊN TICKET")}</>}{sortHeader("assignee", "NGƯỜI TEST")}<th>TRẠNG THÁI</th><th>THIẾT BỊ ĐÃ TEST</th></tr></thead><tbody>{visible.map(ticket => <tr key={ticket.id}>
+          {!manual && <><td className="golive-key">{ticket.issueKey}</td>
+          <td className="golive-summary">{ticket.summary || <span className="muted">(không có tên)</span>}</td></>}
           <td className="golive-assignee">{ticket.assignee ? <HolderIdentity name={ticket.assignee} avatar={people.find(person => person.userId === ticket.assigneeUserId)?.avatar || ""} /> : <span className="muted">Chưa có người test</span>}</td>
           <td><span className={statusClass(statusOf(ticket))}>{statusOf(ticket)}</span></td>
           <td className="golive-devices">{!ticket.assignee ? <span className="muted">Chưa có người test</span> : !ticket.assigneeUserId ? <span className="muted">“{ticket.assignee}” chưa khớp tài khoản nào</span> : (() => {
@@ -224,7 +229,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast }: { peopl
                 const DeviceIcon = /ipad|tablet|máy tính bảng/i.test(device.name) ? Tablet : /laptop|macbook/i.test(device.name) ? Laptop : Smartphone;
                 const detail = device.handedOver ? (checked ? "Đã test · đã bàn giao" : "Đã bàn giao · chưa test") : device.optional && !checked ? "Máy mới · không bắt buộc" : checked ? "Đã test" : "Chưa test";
                 return <li key={device.id}><label className={(checked ? "checked " : "") + (mine ? "" : "readonly")} title={mine ? "" : current?.completedAt ? "Đợt golive đã hoàn thành" : "Chỉ " + ticket.assignee + " mới tích được"}>
-                  <input type="checkbox" aria-label={ticket.issueKey + " · " + device.name} checked={checked} disabled={!mine} onChange={e => void toggleCheck(ticket, device, e.target.checked)} />
+                  <input type="checkbox" aria-label={(manual ? ticket.assignee : ticket.issueKey) + " · " + device.name} checked={checked} disabled={!mine} onChange={e => void toggleCheck(ticket, device, e.target.checked)} />
                   <DeviceIcon className="golive-device-icon" size={19} aria-hidden="true" />
                   <span className="golive-device-copy"><span className="golive-device-name">{device.name}</span><small className={device.handedOver && !checked ? "golive-warn" : ""}>{detail}</small></span>
                   <span className="golive-check-box" aria-hidden="true">{checked && <Check size={13} strokeWidth={3} />}</span>
@@ -232,12 +237,12 @@ export function GoliveBoard({ people, currentUserId, onError, onToast }: { peopl
               })}</ul>
             </div>;
           })()}</td>
-        </tr>)}</tbody></table>{visible.length === 0 && <p className="empty">Không có ticket phù hợp.</p>}</div></section>
+        </tr>)}</tbody></table>{visible.length === 0 && <p className="empty">Không có {rowLabel} phù hợp.</p>}</div></section>
       </>}
       </>}
     {unfinished && <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setUnfinished(null); }} onKeyDown={e => { if (e.key === "Escape") setUnfinished(null); }}><div className="modal golive-warning" role="alertdialog" aria-modal="true" aria-labelledby="golive-warning-title">
-      <div className="modal-head"><div className="golive-warning-head"><AlertTriangle size={22} /><div><h2 id="golive-warning-title">Chưa thể hoàn thành đợt golive</h2><p>Còn {unfinished.length} ticket chưa Done. Người test cần tích đủ các thiết bị đang cầm.</p></div></div><button className="icon-button" onClick={() => setUnfinished(null)} aria-label="Đóng"><X size={21} /></button></div>
-      <div className="golive-warning-list"><table><thead><tr><th>MÃ</th><th>TÊN TICKET</th><th>NGƯỜI TEST</th></tr></thead><tbody>{unfinished.map(item => <tr key={item.issueKey}><td className="golive-key">{item.issueKey}</td><td>{item.summary}</td><td>{item.assignee || <span className="muted">Chưa có người test</span>}</td></tr>)}</tbody></table></div>
+      <div className="modal-head"><div className="golive-warning-head"><AlertTriangle size={22} /><div><h2 id="golive-warning-title">Chưa thể hoàn thành đợt golive</h2><p>Còn {unfinished.length} {rowLabel} chưa Done. Người test cần tích đủ các thiết bị đang cầm.</p></div></div><button className="icon-button" onClick={() => setUnfinished(null)} aria-label="Đóng"><X size={21} /></button></div>
+      <div className="golive-warning-list"><table><thead><tr>{!manual && <><th>MÃ</th><th>TÊN TICKET</th></>}<th>NGƯỜI TEST</th></tr></thead><tbody>{unfinished.map(item => <tr key={item.issueKey}>{!manual && <><td className="golive-key">{item.issueKey}</td><td>{item.summary}</td></>}<td>{item.assignee || <span className="muted">Chưa có người test</span>}</td></tr>)}</tbody></table></div>
       <div className="modal-actions"><button autoFocus className="primary-button" onClick={() => setUnfinished(null)}>Đã hiểu</button></div>
     </div></div>}
     {pending && <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget && !busy) setPending(null); }}><div className="modal" role="dialog" aria-modal="true" aria-label="Đặt tên đợt golive">
@@ -246,5 +251,6 @@ export function GoliveBoard({ people, currentUserId, onError, onToast }: { peopl
       <ul className="golive-preview">{pending.tickets.slice(0, 5).map(ticket => <li key={ticket.issueKey}><strong>{ticket.issueKey}</strong> {ticket.summary}</li>)}{pending.tickets.length > 5 && <li className="muted">… và {pending.tickets.length - 5} ticket khác</li>}</ul>
       <div className="modal-actions"><button className="outline-button" disabled={busy} onClick={() => setPending(null)}>Huỷ</button><button className="primary-button" disabled={busy || releaseName.trim().length < 2} onClick={() => void confirmImport()}>{busy ? "Đang import..." : "Import"} <ArrowRight size={17} /></button></div>
     </div></div>}
+    {creating && <ManualGoliveDialog onClose={() => setCreating(false)} onManageRoles={() => { setCreating(false); onManageRoles(); }} onCreated={id => { setCreating(false); setView("active"); resetFilters(); onToast("Đã tạo đợt golive."); void load(id); }} />}
   </>;
 }

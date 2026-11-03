@@ -103,6 +103,21 @@ export async function POST(request: Request) {
   try {
     const db = getDb();
     const now = new Date().toISOString();
+    if (body.action === "create-manual") {
+      const name = clean(body.name, 120), fixVersion = clean(body.fixVersion, 120);
+      if (name.length < 2 || !fixVersion) return error("Nhập tên đợt golive (ít nhất 2 ký tự) và fixVersion.");
+      const testers = await db.select({ userId: userProfiles.userId, displayName: userProfiles.displayName }).from(userProfiles).where(eq(userProfiles.role, "QE"));
+      if (!testers.length) return error("Chưa có tài khoản QE. Hãy nhờ Manager gán role trong Tài khoản của tôi trước.");
+      const [profile] = await db.select({ displayName: userProfiles.displayName }).from(userProfiles).where(eq(userProfiles.userId, user.userId));
+      const id = crypto.randomUUID();
+      const rows = testers.map((tester, index) => ({ releaseId: id, issueKey: "QE-" + (index + 1), summary: fixVersion, assignee: tester.displayName, assigneeUserId: tester.userId, updatedAt: now }));
+      await db.batch([
+        db.insert(goliveReleases).values({ id, name, fixVersion, source: "manual", createdBy: profile?.displayName || user.displayName || user.email, createdAt: now }),
+        ...Array.from({ length: Math.ceil(rows.length / 10) }, (_, index) => db.insert(goliveTickets).values(rows.slice(index * 10, index * 10 + 10))),
+      ]);
+      await loadRelease(db, id, now);
+      return Response.json({ releaseId: id, count: testers.length });
+    }
     if (body.action === "import") {
       const name = clean(body.name, 120);
       if (name.length < 2) return error("Hãy đặt tên cho đợt golive (ít nhất 2 ký tự).");
@@ -153,7 +168,7 @@ export async function POST(request: Request) {
       if (release.completedAt) return Response.json({ release });
       const { tickets } = await loadRelease(db, releaseId, now);
       const unfinished = tickets.filter(item => !item.doneAt).map(item => ({ issueKey: item.issueKey, summary: item.summary, assignee: item.assignee }));
-      if (unfinished.length) return Response.json({ error: "Còn " + unfinished.length + " ticket chưa Done.", unfinished }, { status: 409 });
+      if (unfinished.length) return Response.json({ error: "Còn " + unfinished.length + (release.source === "manual" ? " người test" : " ticket") + " chưa Done.", unfinished }, { status: 409 });
       const [profile] = await db.select({ displayName: userProfiles.displayName }).from(userProfiles).where(eq(userProfiles.userId, user.userId));
       const [updated] = await db.update(goliveReleases).set({ completedAt: now, completedBy: profile?.displayName || user.displayName || user.email }).where(eq(goliveReleases.id, releaseId)).returning();
       // History keeps only the newest completed releases.

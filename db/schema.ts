@@ -30,6 +30,7 @@ export const userProfiles = sqliteTable("user_profiles", {
   email: text("email").notNull(),
   displayName: text("display_name").notNull(),
   avatarKey: text("avatar_key").notNull().default(""),
+  role: text("role").notNull().default(""),
   updatedAt: text("updated_at").notNull(),
 });
 
@@ -65,6 +66,8 @@ export const teamsDeliveries = sqliteTable("teams_deliveries", {
 export const goliveReleases = sqliteTable("golive_releases", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
+  source: text("source").notNull().default("csv"),
+  fixVersion: text("fix_version").notNull().default(""),
   createdBy: text("created_by").notNull(),
   createdAt: text("created_at").notNull(),
   completedAt: text("completed_at"),

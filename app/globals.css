@@ -418,6 +418,35 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 .golive-devices .muted { font-size: 12px; }
 .golive-device-group { min-width: 220px; max-width: 320px; text-align: left; }
 .golive-device-count { margin-bottom: 7px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.golive-heading-actions { display: flex; flex-wrap: wrap; gap: 10px; flex-shrink: 0; }
+.golive-heading-actions button { display: inline-flex; align-items: center; gap: 7px; }
+.golive-version { display: block; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.manual-golive-dialog { position: fixed; margin: auto; border: 0; color: var(--ink, #302840); max-height: calc(100dvh - 32px); overflow-y: auto; }
+.manual-golive-dialog::backdrop { background: rgb(30 20 48 / 40%); }
+.manual-testers { margin: 18px 0; }
+.manual-testers h3 { font-size: 14px; margin: 0 0 7px; }
+.manual-testers p, .account-roles > p { font-size: 13px; color: var(--muted); line-height: 1.6; }
+.manual-testers ul, .account-role-list { list-style: none; margin: 12px 0 0; padding: 0; }
+.manual-testers ul { max-height: 200px; overflow: auto; }
+.manual-testers li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; }
+.account-roles { margin-top: 24px; }
+.account-roles h2 { margin: 0 0 8px; font-size: 18px; }
+.account-role-list li { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 14px 0; border-top: 1px solid var(--line); }
+.account-role-person { min-width: 0; display: grid; gap: 6px; }
+.account-role-person small { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.account-role-select { width: 180px; flex-shrink: 0; }
+.role-link { background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; cursor: pointer; font: inherit; }
+.role-error, .account-roles > p.role-error { color: #a3333d; font-size: 13px; }
+.role-feedback:empty { display: none; }
+.golive-manual-table td:last-child { text-align: left; width: 40%; }
+.golive-manual-table .golive-device-group { max-width: 360px; }
+@media (max-width: 760px) {
+  .golive-heading-actions { flex-shrink: 1; }
+  .golive-heading-actions button { min-height: 42px; }
+  .account-role-list li { align-items: flex-start; gap: 10px; }
+  .account-role-select { width: 140px; }
+  .golive-manual-table { min-width: 620px; }
+}
 .golive-checklist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .golive-checklist label { position: relative; display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); font-size: 13px; cursor: pointer; text-align: left; }
 .golive-checklist label:not(.readonly):hover { border-color: var(--accent); background: var(--lavender); }

@@ -29,6 +29,18 @@ Sau khi nâng cấp từ phiên bản đầu, áp dụng tiếp migration `drizz
 
 ## Triển khai Sites
 
+Tracking Golive hỗ trợ import CSV hoặc tạo trực tiếp bằng tên và fixVersion. Đợt tạo trực tiếp chốt danh sách các tài khoản QE tại thời điểm tạo, mỗi người một checklist thiết bị. fixVersion là nhãn phiên bản, không tự lấy ticket từ Jira.
+
+Trong “Tài khoản của tôi”, Manager gán một role cho mỗi tài khoản: Manager, QE, DEV hoặc PM. Tài khoản chủ Site được khởi tạo là Manager qua migration `0011_manual-golive-roles.sql`; các tài khoản còn lại chờ gán role. Phải giữ ít nhất một Manager. Thay đổi role không sửa danh sách người test của đợt đã tạo.
+
+Kiểm tra API local (dev server đang chạy, đã áp dụng migration):
+
+```sh
+node tests/manual-golive.integration.mjs /absolute/path/to/.wrangler/state/v3/d1/miniflare-D1DatabaseObject/database.sqlite
+```
+
+Bài kiểm tra tạo dữ liệu tạm trong D1 local rồi dọn lại; không dùng với database production.
+
 Site đã được liên kết qua `project_id` trong `.openai/hosting.json`. Không thêm `origin` hoặc token deploy vào Git config hay file `.env`.
 
 Quy trình chuẩn cho Codex/Sites:

@@ -78,6 +78,13 @@
       "when": 1793677380115,
       "tag": "0010_sync-holder-identities",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1793678550298,
+      "tag": "0011_manual-golive-roles",
+      "breakpoints": true
     }
   ]
 }
