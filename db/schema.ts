@@ -128,3 +128,11 @@ export const pushTokens = sqliteTable("push_tokens", {
   userId: text("user_id").notNull(),
   updatedAt: text("updated_at").notNull(),
 }, table => [index("push_tokens_user_id_idx").on(table.userId)]);
+
+// Admin switch per push notification type (keys in app/lib/push-events.ts). No row = on.
+export const pushSettings = sqliteTable("push_settings", {
+  event: text("event").primaryKey(),
+  enabled: integer("enabled", { mode: "boolean" }).notNull(),
+  updatedBy: text("updated_by").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
