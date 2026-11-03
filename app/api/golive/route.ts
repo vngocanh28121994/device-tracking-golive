@@ -1,12 +1,26 @@
-import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { requireMember } from "../../lib/member-access";
 import { getDb } from "../../../db";
 import { devices, goliveDeviceChecks, goliveReleases, goliveTicketDevices, goliveTickets, goliveWebSignoffs, userProfiles } from "../../../db/schema";
 import { normalizeName } from "../../lib/golive";
+import { waitUntil } from "cloudflare:workers";
+import { notifyRoles, notifyUsers } from "../../lib/push";
 
 type Db = ReturnType<typeof getDb>;
 const MAX_COMPLETED = 10;
 type Profile = { userId: string; displayName: string };
+
+// Managers and PMs follow progress; everyone hears when a phase or the release is finished.
+const WATCHERS = ["Manager", "PM"], EVERYONE = ["Manager", "QE", "DEV", "PM"];
+
+// A QE is announced once their last open ticket of the release is Done; the last open ticket announces the release.
+// ponytail: two loads racing on the same ticket can announce twice; add a claimed flag if that gets noisy.
+async function announceDone(db: Db, releaseId: string, releaseName: string, done: { assignee: string }[]) {
+  const open = await db.select({ assignee: goliveTickets.assignee }).from(goliveTickets).where(and(eq(goliveTickets.releaseId, releaseId), isNull(goliveTickets.doneAt)));
+  const finished = Array.from(new Set(done.map(item => item.assignee).filter(name => name && !open.some(row => row.assignee === name))));
+  for (const name of finished) await notifyRoles(db, WATCHERS, { title: "QE đã test xong", body: name + " đã test xong đợt " + releaseName + "." });
+  if (!open.length) await notifyRoles(db, EVERYONE, { title: "Golive đã test xong", body: "Tất cả đã test xong đợt " + releaseName + ". Manager có thể bấm Hoàn thành." });
+}
 
 // A tester name maps to an account only when exactly one display name matches.
 function matchAccount(profiles: Profile[], name: string) {
@@ -42,7 +56,7 @@ async function loadRelease(db: Db, releaseId: string, now = new Date().toISOStri
   if (!releaseId) return { tickets: [], held: new Map<string, { id: string; name: string; category: string }[]>(), checks: [] };
   const [rows, [release], profiles, deviceRows, checks] = await Promise.all([
     db.select().from(goliveTickets).where(ticketId === undefined ? eq(goliveTickets.releaseId, releaseId) : eq(goliveTickets.id, ticketId)).orderBy(goliveTickets.id),
-    db.select({ completedAt: goliveReleases.completedAt }).from(goliveReleases).where(eq(goliveReleases.id, releaseId)),
+    db.select({ completedAt: goliveReleases.completedAt, name: goliveReleases.name }).from(goliveReleases).where(eq(goliveReleases.id, releaseId)),
     db.select({ userId: userProfiles.userId, displayName: userProfiles.displayName }).from(userProfiles),
     activeDevices(db),
     db.select().from(goliveDeviceChecks).where(ticketId === undefined ? inRelease(goliveDeviceChecks.ticketId, releaseId) : eq(goliveDeviceChecks.ticketId, ticketId)),
@@ -63,13 +77,14 @@ async function loadRelease(db: Db, releaseId: string, now = new Date().toISOStri
     const writes = [];
     for (let i = 0; i < doneIds.length; i += 90) writes.push(db.update(goliveTickets).set({ doneAt: now }).where(inArray(goliveTickets.id, doneIds.slice(i, i + 90))));
     if (writes.length) await db.batch(writes as [typeof writes[number], ...typeof writes]);
+    if (doneIds.length) waitUntil(announceDone(db, releaseId, release.name, tickets.filter(item => doneIds.includes(item.id))));
   }
   return { tickets, held, checks };
 }
 
 // The ticket and whether its release is completed, in one round trip.
 const ticketWithRelease = (db: Db, ticketId: number) =>
-  db.select({ ticket: goliveTickets, completedAt: goliveReleases.completedAt }).from(goliveTickets).innerJoin(goliveReleases, eq(goliveReleases.id, goliveTickets.releaseId)).where(eq(goliveTickets.id, ticketId));
+  db.select({ ticket: goliveTickets, completedAt: goliveReleases.completedAt, releaseName: goliveReleases.name }).from(goliveTickets).innerJoin(goliveReleases, eq(goliveReleases.id, goliveTickets.releaseId)).where(eq(goliveTickets.id, ticketId));
 
 // Web phase: every account with role QE confirms the web build before the app build starts.
 // Progress counts today's QE accounts, so a sign-off from someone no longer QE is not counted.
@@ -207,6 +222,7 @@ export async function POST(request: Request) {
       const by = me?.displayName || user.displayName || user.email;
       // Undoing clears Done too; the next load marks it Done again if every device is already ticked.
       await db.update(goliveTickets).set(skipped ? { skippedAt: now, skippedBy: by, skipKind: kind, skipReason: reason, skipNotified: notified, doneAt: now } : { skippedAt: null, skippedBy: null, skipKind: "not-needed", skipReason: "", skipNotified: false, doneAt: null }).where(eq(goliveTickets.id, ticketId));
+      if (skipped) waitUntil(announceDone(db, ticket.releaseId, found.releaseName, [ticket]));
       const { tickets } = await loadRelease(db, ticket.releaseId, now, ticketId);
       const updated = tickets[0];
       return Response.json({ doneAt: updated?.doneAt ?? null, skippedAt: updated?.skippedAt ?? null, skippedBy: updated?.skippedBy ?? null, skipKind: updated?.skipKind ?? "not-needed", skipReason: updated?.skipReason ?? "", skipNotified: updated?.skipNotified ?? false });
@@ -214,7 +230,7 @@ export async function POST(request: Request) {
     if (body.action === "web-signoff") {
       const releaseId = clean(body.releaseId, 60), done = body.done !== false;
       const [[release], [me]] = await Promise.all([
-        db.select({ completedAt: goliveReleases.completedAt }).from(goliveReleases).where(eq(goliveReleases.id, releaseId)),
+        db.select({ completedAt: goliveReleases.completedAt, name: goliveReleases.name }).from(goliveReleases).where(eq(goliveReleases.id, releaseId)),
         db.select({ role: userProfiles.role }).from(userProfiles).where(eq(userProfiles.userId, user.userId)),
       ]);
       if (!release) return error("Không tìm thấy đợt golive.", 404);
@@ -222,17 +238,26 @@ export async function POST(request: Request) {
       if (me?.role !== "QE") return error("Chỉ tài khoản QE mới xác nhận hoàn thành test web.", 403);
       if (done) await db.insert(goliveWebSignoffs).values({ releaseId, userId: user.userId, signedAt: now }).onConflictDoNothing();
       else await db.delete(goliveWebSignoffs).where(and(eq(goliveWebSignoffs.releaseId, releaseId), eq(goliveWebSignoffs.userId, user.userId)));
-      return Response.json({ web: await webPhase(db, releaseId) });
+      const web = await webPhase(db, releaseId);
+      if (done) {
+        const name = web.qe.find(person => person.userId === user.userId)?.displayName || user.displayName;
+        waitUntil(notifyRoles(db, WATCHERS, { title: "QE đã xong test web", body: name + " đã xác nhận test web đợt " + release.name + "." }));
+        if (web.qe.every(person => person.userId in web.signed)) waitUntil(notifyRoles(db, EVERYONE, { title: "Test web hoàn tất", body: "Tất cả QE đã test xong web đợt " + release.name + ". Bắt đầu test app." }));
+      }
+      return Response.json({ web });
     }
     if (body.action === "remind-web") {
-      // Push notifications come later; for now this only checks who may remind and who is left.
       const releaseId = clean(body.releaseId, 60);
-      const [[me], web] = await Promise.all([
+      const [[me], web, [release]] = await Promise.all([
         db.select({ role: userProfiles.role }).from(userProfiles).where(eq(userProfiles.userId, user.userId)),
         webPhase(db, releaseId),
+        db.select({ name: goliveReleases.name }).from(goliveReleases).where(eq(goliveReleases.id, releaseId)),
       ]);
       if (me?.role !== "Manager") return error("Chỉ Manager mới được nhắc nhở.", 403);
-      return Response.json({ pending: web.qe.filter(person => !(person.userId in web.signed)).length });
+      if (!release) return error("Không tìm thấy đợt golive.", 404);
+      const pending = web.qe.filter(person => !(person.userId in web.signed)).map(person => person.userId);
+      waitUntil(notifyUsers(db, pending, { title: "Nhắc test web", body: "Bạn chưa xác nhận test web đợt " + release.name + "." }));
+      return Response.json({ pending: pending.length });
     }
     if (body.action === "complete-release") {
       const releaseId = clean(body.releaseId, 60);
@@ -244,6 +269,7 @@ export async function POST(request: Request) {
       if (unfinished.length) return Response.json({ error: "Còn " + unfinished.length + (release.source === "manual" ? " người test" : " ticket") + " chưa Done.", unfinished }, { status: 409 });
       const [profile] = await db.select({ displayName: userProfiles.displayName }).from(userProfiles).where(eq(userProfiles.userId, user.userId));
       const [updated] = await db.update(goliveReleases).set({ completedAt: now, completedBy: profile?.displayName || user.displayName || user.email }).where(eq(goliveReleases.id, releaseId)).returning();
+      waitUntil(notifyRoles(db, EVERYONE, { title: "Golive hoàn thành 🎉", body: "Đợt " + release.name + " đã hoàn thành." }));
       // History keeps only the newest completed releases.
       const completed = await db.select({ id: goliveReleases.id }).from(goliveReleases).where(isNotNull(goliveReleases.completedAt)).orderBy(desc(goliveReleases.completedAt));
       for (const old of completed.slice(MAX_COMPLETED)) await deleteRelease(db, old.id);

@@ -9,6 +9,7 @@ import { readUrlParam, writeUrlParams } from "../lib/url-state";
 import { ImportedTicket, normalizeName, releaseNameFromCsv, ticketsFromCsv } from "../lib/golive";
 import { ManualGoliveDialog } from "./ManualGoliveDialog";
 import { CannotTestDialog } from "./CannotTestDialog";
+import { PushToggle } from "./PushToggle";
 
 type Release = { id: string; name: string; source: string; fixVersion: string; createdBy: string; createdAt: string; completedAt: string | null; completedBy: string | null; ticketCount?: number };
 const MAX_HISTORY = 10;
@@ -159,10 +160,10 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
     catch (e) { onError(e instanceof Error ? e.message : "Không thể cập nhật."); } finally { setBusy(false); }
   }
 
-  // Push notifications are not built yet; the button already checks who may remind and who is left.
+  // Sends a push to every QE who has not confirmed the web test yet.
   async function remindWeb() {
     setBusy(true);
-    try { const result = await post({ action: "remind-web", releaseId }); onToast("Nhắc nhở qua thông báo đẩy sẽ có sớm · " + result.pending + " QE chưa xác nhận"); }
+    try { const result = await post({ action: "remind-web", releaseId }); onToast("Đã gửi nhắc nhở tới " + result.pending + " QE chưa xác nhận"); }
     catch (e) { onError(e instanceof Error ? e.message : "Không thể nhắc nhở."); } finally { setBusy(false); }
   }
 
@@ -297,7 +298,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
 
   return <>
     <div className="page-heading"><div><h1>Tracking Golive.</h1><p>Tạo đợt golive cho team QE hoặc import ticket từ Jira. Người test xác nhận trên từng thiết bị đang cầm.</p></div>
-      <div className="golive-heading-actions"><button className="outline-button" onClick={() => fileInput.current?.click()}><FileUp size={18} /> Import CSV</button><button className="primary-button" onClick={() => setCreating(true)}><Plus size={18} /> Tạo đợt golive</button></div>
+      <div className="golive-heading-actions"><PushToggle onError={onError} onToast={onToast} /><button className="outline-button" onClick={() => fileInput.current?.click()}><FileUp size={18} /> Import CSV</button><button className="primary-button" onClick={() => setCreating(true)}><Plus size={18} /> Tạo đợt golive</button></div>
       <input ref={fileInput} type="file" accept=".csv,text/csv" hidden onChange={e => void pickFile(e.target.files?.[0])} /></div>
     {loading ? <LoadingState label="Đang tải đợt golive..." />
       : <>

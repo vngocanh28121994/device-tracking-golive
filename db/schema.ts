@@ -121,3 +121,10 @@ export const goliveWebSignoffs = sqliteTable("golive_web_signoffs", {
   userId: text("user_id").notNull(),
   signedAt: text("signed_at").notNull(),
 }, table => [primaryKey({ columns: [table.releaseId, table.userId] })]);
+
+// Firebase Cloud Messaging tokens, one per browser that turned on notifications.
+export const pushTokens = sqliteTable("push_tokens", {
+  token: text("token").primaryKey(),
+  userId: text("user_id").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, table => [index("push_tokens_user_id_idx").on(table.userId)]);

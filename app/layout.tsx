@@ -5,6 +5,7 @@ export const metadata: Metadata = {
   title: "Quản lý thiết bị",
   description: "Quản lý từng thiết bị, người đang giữ và lịch sử bàn giao trong đội.",
   icons: { icon: "/favicon.svg" },
+  manifest: "/manifest.webmanifest",
 };
 
 // Applied before first paint so a dark-mode visitor never sees a light flash.
