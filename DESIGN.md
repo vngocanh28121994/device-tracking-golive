@@ -29,6 +29,6 @@ Receive/lend confirmations use a short catch-the-device interaction. The basket 
 ## Mobile workspace
 
 - At widths up to 900px, use the navigation drawer and stack golive rows as cards. Show ticket key, status, title, tester and full-width device checklist without horizontal table scrolling. Manual releases show tester, status and checklist.
-- Keep search and a sort picker visible. Column filters and release actions expand from labeled buttons; retain access to every sort/filter option.
+- Keep search visible; mobile cards keep the default tester A–Z order without a sort picker (desktop sorts by column header). Column filters and release actions expand from labeled buttons.
 - Device rows and interactive controls need at least 44px touch targets. Form inputs and select triggers use 16px text; dialogs fit inside the viewport and scroll vertically.
 - Role assignment stacks each account above its role selector. Wrap long names, emails and fixVersions; preserve desktop tables above the mobile breakpoint.

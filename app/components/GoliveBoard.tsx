@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, History, CheckCircle2, ArrowUp, ArrowUpDown, Ban, Check, FileUp, Laptop, ListFilter, MoreHorizontal, Plus, Rocket, Search, Smartphone, Tablet, Trash2, Undo2, X } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, History, CheckCircle2, ArrowUp, ArrowUpDown, Ban, Check, FileUp, Laptop, ListFilter, Plus, Rocket, Search, Smartphone, Tablet, Trash2, Undo2, X } from "lucide-react";
 import { StyledSelect } from "./StyledSelect";
 import { HolderIdentity } from "./HolderIdentity";
 import { LoadingState } from "./LoadingState";
@@ -38,7 +38,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
   const fileInput = useRef<HTMLInputElement>(null);
   const [confirm, confirmDialog] = useConfirm();
   const [creating, setCreating] = useState(false);
-  const [filtersOpen, setFiltersOpen] = useState(false), [actionsOpen, setActionsOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const load = useCallback(async (id = "") => {
     try {
@@ -249,21 +249,15 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
           {current.fixVersion && <span className="golive-version">fixVersion: <strong>{current.fixVersion}</strong></span>}
           {current && <span className="golive-progress"><strong>{done}/{tickets.length}</strong> {rowLabel} đã test xong trên mọi thiết bị</span>}
           {current?.completedAt && <span className="golive-completed"><CheckCircle2 size={16} /> Đã hoàn thành {prettyTime(current.completedAt)}{current.completedBy ? " · " + current.completedBy : ""}</span>}
-          <button className="outline-button golive-actions-toggle" aria-expanded={actionsOpen} aria-controls="golive-release-actions" onClick={() => setActionsOpen(!actionsOpen)}>Thao tác đợt <MoreHorizontal size={17} /></button>
-          <div id="golive-release-actions" className={"golive-release-actions" + (actionsOpen ? " is-open" : "")}>
+          <div className="golive-release-actions">
           {!current.completedAt && <button className="primary-button golive-complete" disabled={busy} onClick={() => void completeRelease()}><CheckCircle2 size={17} /> Hoàn thành đợt golive</button>}
-          <button className="outline-button golive-delete" disabled={busy} onClick={() => void deleteRelease()}><Trash2 size={16} /> Xoá đợt golive</button>
+          <button className="outline-button golive-delete" disabled={busy} onClick={() => void deleteRelease()} aria-label="Xoá đợt golive" title="Xoá đợt golive"><Trash2 size={16} /><span className="golive-delete-label">Xoá đợt golive</span></button>
           </div>
         </div>
         <div className="golive-stats">{counts.map(([status, count]) => <button key={status} className={"golive-stat " + (statusFilter === status ? "active" : "")} aria-pressed={statusFilter === status} onClick={() => setStatusFilter(statusFilter === status ? "__all__" : status)}><span className={statusClass(status)}>{status}</span><strong>{count}</strong></button>)}</div>
         <div className="inventory-toolbar golive-toolbar"><div className="search"><Search size={19} /><input aria-label={manual ? "Tìm người test" : "Tìm ticket"} value={query} onChange={e => setQuery(e.target.value)} placeholder={manual ? "Tìm người test..." : "Tìm mã, tên ticket, người test..."} /></div><label className="golive-mine"><input type="checkbox" checked={mineOnly} onChange={e => setMineOnly(e.target.checked)} /> {manual ? "Chỉ checklist của tôi" : "Chỉ ticket của tôi"}</label><span>{visible.length} {rowLabel}</span></div>
         <div className="golive-mobile-tools">
           <button className="outline-button" aria-expanded={filtersOpen} aria-controls="golive-column-filters" onClick={() => setFiltersOpen(!filtersOpen)}><ListFilter size={17} /> Bộ lọc{columnFilterCount > 0 ? " (" + columnFilterCount + ")" : ""}</button>
-          <StyledSelect ariaLabel="Sắp xếp danh sách" value={sort ? sort.key + ":" + sort.dir : "none"} onChange={value => { const [key, dir] = value.split(":"); setSort(value === "none" ? null : { key: key as SortKey, dir: Number(dir) as 1 | -1 }); }} options={[
-            { value: "assignee:1", label: "Người test A–Z" }, { value: "assignee:-1", label: "Người test Z–A" },
-            ...(!manual ? [{ value: "issueKey:1", label: "Mã tăng dần" }, { value: "issueKey:-1", label: "Mã giảm dần" }, { value: "summary:1", label: "Tên ticket A–Z" }, { value: "summary:-1", label: "Tên ticket Z–A" }] : []),
-            { value: "none", label: "Thứ tự ban đầu" },
-          ]} placeholder="Sắp xếp" />
         </div>
         <div id="golive-column-filters" className={"golive-filters" + (filtersOpen ? " is-open" : "")}>
           {!manual && <><label>MÃ<input list="golive-projects" value={keyFilter} onChange={e => setKeyFilter(e.target.value.trim().toUpperCase())} placeholder="VD: DIP hoặc DIP-2313" /><datalist id="golive-projects">{projects.map(project => <option key={project} value={project} />)}</datalist></label>
