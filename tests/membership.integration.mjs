@@ -28,6 +28,7 @@ try {
   for (const path of ["/api/profile", "/api/inventory", "/api/golive", "/mcp", "/api/teams-settings"]) assert.equal((await request(path, {})).status, 403, path + " POST nonmember");
   sql("INSERT INTO members VALUES ('seedy@sites.test','test','test');");
   assert.equal((await request("/api/profile", { displayName: "Local tester" })).status, 200);
+  sql("UPDATE user_profiles SET role='' WHERE user_id='local_seedy';");
   assert.equal((await request("/api/profile", { action: "add-member", email })).status, 403, "unassigned cannot invite");
   sql("UPDATE user_profiles SET role='QE' WHERE user_id='local_seedy';");
   assert.equal((await request("/api/profile", { action: "add-member", email })).status, 403, "QE cannot invite");
