@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, History, CheckCircle2, ArrowUp, ArrowUpDown, Ban, Check, FileUp, Laptop, ListFilter, MoreHorizontal, Plus, Rocket, Search, Smartphone, Tablet, Trash2, Undo2, X } from "lucide-react";
 import { StyledSelect } from "./StyledSelect";
 import { HolderIdentity } from "./HolderIdentity";
+import { LoadingState } from "./LoadingState";
 import { ImportedTicket, normalizeName, releaseNameFromCsv, ticketsFromCsv } from "../lib/golive";
 import { ManualGoliveDialog } from "./ManualGoliveDialog";
 
@@ -20,10 +21,14 @@ type DeviceCheck = { ticketId: number; deviceId: string; deviceName: string; che
 const statusClass = (status: string) => "status-chip " + (status === "Done" ? "status-done" : "status-blocked");
 const prettyTime = (iso: string) => new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Asia/Ho_Chi_Minh" }).format(new Date(iso));
 
+type GoliveData = { releases?: Release[]; releaseId?: string; tickets?: Ticket[]; devicesByUser?: Record<string, HeldDevice[]>; checks?: DeviceCheck[]; recorded?: RecordedDevice[]; error?: string };
+// The last response outlives the component, so coming back to this page shows it at once while it refreshes.
+let lastData: GoliveData | null = null;
+
 export function GoliveBoard({ people, currentUserId, onError, onToast, onManageRoles }: { people: Person[]; currentUserId: string; onError: (message: string) => void; onToast: (message: string) => void; onManageRoles: () => void }) {
-  const [releases, setReleases] = useState<Release[]>([]), [releaseId, setReleaseId] = useState(""), [tickets, setTickets] = useState<Ticket[]>([]);
-  const [devicesByUser, setDevicesByUser] = useState<Record<string, HeldDevice[]>>({}), [checks, setChecks] = useState<DeviceCheck[]>([]), [recorded, setRecorded] = useState<RecordedDevice[]>([]), [mineOnly, setMineOnly] = useState(false);
-  const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [view, setView] = useState<"active" | "history">("active");
+  const [releases, setReleases] = useState<Release[]>(lastData?.releases || []), [releaseId, setReleaseId] = useState(lastData?.releaseId || ""), [tickets, setTickets] = useState<Ticket[]>(lastData?.tickets || []);
+  const [devicesByUser, setDevicesByUser] = useState<Record<string, HeldDevice[]>>(lastData?.devicesByUser || {}), [checks, setChecks] = useState<DeviceCheck[]>(lastData?.checks || []), [recorded, setRecorded] = useState<RecordedDevice[]>(lastData?.recorded || []), [mineOnly, setMineOnly] = useState(false);
+  const [loading, setLoading] = useState(!lastData), [busy, setBusy] = useState(false), [view, setView] = useState<"active" | "history">("active");
   const [unfinished, setUnfinished] = useState<Unfinished[] | null>(null);
   const [pending, setPending] = useState<{ fileName: string; tickets: ImportedTicket[] } | null>(null), [releaseName, setReleaseName] = useState("");
   const [query, setQuery] = useState(""), [statusFilter, setStatusFilter] = useState("__all__");
@@ -36,12 +41,14 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
   const load = useCallback(async (id = "") => {
     try {
       const r = await fetch("/api/golive" + (id ? "?release=" + encodeURIComponent(id) : ""), { cache: "no-store" });
-      const data = await r.json() as { releases?: Release[]; releaseId?: string; tickets?: Ticket[]; devicesByUser?: Record<string, HeldDevice[]>; checks?: DeviceCheck[]; recorded?: RecordedDevice[]; error?: string };
+      const data = await r.json() as GoliveData;
       if (!r.ok) throw new Error(data.error || "Không thể tải danh sách golive.");
+      lastData = data;
       setReleases(data.releases || []); setReleaseId(data.releaseId || ""); setTickets(data.tickets || []); setDevicesByUser(data.devicesByUser || {}); setChecks(data.checks || []); setRecorded(data.recorded || []);
     } catch (e) { onError(e instanceof Error ? e.message : "Không thể tải danh sách golive."); } finally { setLoading(false); }
   }, [onError]);
-  useEffect(() => { void load(); }, [load]);
+  // Reopen the release that was on screen; naming it also lets the server load it in parallel.
+  useEffect(() => { void load(lastData?.releaseId || ""); }, [load]);
   // Pick up handovers and ticks made elsewhere: once a minute, and when the tab comes back into view.
   const refreshState = useRef({ releaseId, busy });
   useEffect(() => { refreshState.current = { releaseId, busy }; }, [releaseId, busy]);
@@ -202,7 +209,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
     <div className="page-heading"><div><h1>Tracking Golive.</h1><p>Tạo đợt golive cho team QE hoặc import ticket từ Jira. Người test xác nhận trên từng thiết bị đang cầm.</p></div>
       <div className="golive-heading-actions"><button className="outline-button" onClick={() => fileInput.current?.click()}><FileUp size={18} /> Import CSV</button><button className="primary-button" onClick={() => setCreating(true)}><Plus size={18} /> Tạo đợt golive</button></div>
       <input ref={fileInput} type="file" accept=".csv,text/csv" hidden onChange={e => void pickFile(e.target.files?.[0])} /></div>
-    {loading ? <div className="loading" role="status"><div className="loading-bars"><span /><span /><span /></div>Đang tải đợt golive...</div>
+    {loading ? <LoadingState label="Đang tải đợt golive..." />
       : <>
         <div className="filter-tabs golive-tabs" role="tablist">
           <button role="tab" aria-selected={view === "active"} className={view === "active" ? "active" : ""} onClick={() => switchView("active")}>Đang thực hiện ({active.length})</button>

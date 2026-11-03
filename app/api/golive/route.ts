@@ -104,8 +104,10 @@ export async function GET(request: Request) {
     ]);
     const releases = rows.map(item => ({ ...item, ticketCount: counts.find(row => row.releaseId === item.id)?.count ?? 0 }));
     // Open the newest running release by default; history is opened explicitly.
-    const releaseId = requested || releases.find(item => !item.completedAt)?.id || "";
-    const { tickets, held, checks, recorded } = preloaded ?? await loadRelease(db, releaseId);
+    // A release deleted by someone else falls back to the default one.
+    const found = releases.some(item => item.id === requested);
+    const releaseId = found ? requested : releases.find(item => !item.completedAt)?.id || "";
+    const { tickets, held, checks, recorded } = found && preloaded ? preloaded : await loadRelease(db, releaseId);
     return Response.json({ releases, releaseId, tickets, devicesByUser: Object.fromEntries(held), checks, recorded }, noStore);
   } catch {
     return error("Không thể tải danh sách golive.", 500);

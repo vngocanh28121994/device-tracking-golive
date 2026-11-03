@@ -38,14 +38,15 @@ export async function GET() {
   if (!await getChatGPTUser()) return error("Vui lòng đăng nhập để sử dụng trang.", 401);
   try {
     const db = getDb();
-    let all = await db.select().from(devices);
+    const profileQuery = db.select({userId:userProfiles.userId,displayName:userProfiles.displayName,avatarKey:userProfiles.avatarKey,role:userProfiles.role}).from(userProfiles);
+    const [stored, profiles] = await Promise.all([db.select().from(devices), profileQuery]);
+    let all = stored;
     if (all.length === 0) {
       const now = new Date().toISOString();
       await insertInitialDevices(db, now);
       all = await db.select().from(devices);
     }
     const active = all.filter((item) => !item.archived);
-    const profiles = await db.select({userId:userProfiles.userId,displayName:userProfiles.displayName,avatarKey:userProfiles.avatarKey,role:userProfiles.role}).from(userProfiles);
     // Legacy holders have no account ID. Match only a unique name; explicit manual loans use "".
     const resolved = active.map(item => {
       if (item.holderUserId !== null) {
