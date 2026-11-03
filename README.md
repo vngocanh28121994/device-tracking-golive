@@ -26,3 +26,15 @@ npm run start
 ```
 
 Sau khi nâng cấp từ phiên bản đầu, áp dụng tiếp migration `drizzle/0001_lean_captain_universe.sql` bằng cùng lệnh Wrangler. Chỉ áp dụng mỗi migration một lần cho mỗi cơ sở dữ liệu cục bộ. Dữ liệu cục bộ lưu trong `.wrangler/state`. Trang Sites sẽ tự áp dụng migration khi triển khai.
+
+## Triển khai Sites
+
+Site đã được liên kết qua `project_id` trong `.openai/hosting.json`. Không thêm `origin` hoặc token deploy vào Git config hay file `.env`.
+
+Quy trình chuẩn cho Codex/Sites:
+
+1. Chạy `npm run build`.
+2. Dùng Sites để lấy credential ghi source tạm thời và chạy helper `site-workflow.mjs`; helper này kiểm tra remote, build, commit/push và đóng gói artifact trong một luồng.
+3. Lưu version bằng commit SHA do helper trả về rồi publish version đó. Kiểm tra trạng thái deployment đến khi thành công.
+
+Credential Site chỉ được truyền qua stdin cho helper, không ghi ra terminal, file hay lịch sử Git. Khi deployment lỗi, giữ lại version đã lưu và tiếp tục kiểm tra/publish version đó, không tạo Site mới.
