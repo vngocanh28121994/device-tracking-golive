@@ -607,15 +607,15 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 }
 
 /* Golive: tickets marked as not needing a test */
-.golive-skipped { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 10px 12px; border-radius: 12px; background: var(--surface-muted, rgba(127,127,127,.08)); }
-.golive-skipped > span { display: inline-flex; align-items: center; gap: 7px; font-weight: 650; }
-.golive-skipped small { color: var(--muted); font-weight: 500; margin-left: 4px; }
+.golive-skipped { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--canvas); }
+.golive-skipped-label { display: flex; flex-direction: column; gap: 1px; }
+.golive-skipped-label strong { display: inline-flex; align-items: center; gap: 7px; font-weight: 650; }
+.golive-skipped-label small { color: var(--muted); font-size: 12px; padding-left: 23px; overflow-wrap: anywhere; }
 .golive-skip-button { font-size: 12px; }
 .golive-devices > .golive-skip-button { display: flex; margin-top: 4px; padding-left: 0; min-height: 32px; white-space: nowrap; }
-.golive-skipped > span { flex-wrap: wrap; }
 .golive-skipped .golive-skip-button { min-height: 32px; padding: 4px 10px; }
-@media (max-width: 760px) {
+@media (max-width: 900px) {
   .golive-skipped { flex-direction: row; align-items: center; justify-content: space-between; }
   .golive-skipped .golive-skip-button, .golive-devices > .golive-skip-button { min-height: 44px; }
-  .golive-skipped .golive-skip-button { padding: 8px 14px; }
+  .golive-skipped .golive-skip-button { padding: 8px 14px; flex: none; }
 }
