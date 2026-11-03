@@ -726,6 +726,53 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 .stat-chevron { flex: 0 0 auto; color: var(--muted); transition: transform .18s ease; }
 .stat-release.is-open .stat-chevron { transform: rotate(180deg); }
 .stat-release-body { border-top: 1px solid var(--line); }
+/* How many tickets of this golive each tester has finished, counted per person, before the list itself. */
+/* Both sections of a golive fold away the same way; the chevron sits at the far right of each. */
+.stat-section-toggle { display: flex; align-items: center; gap: 10px; width: 100%; margin: 0; padding: 4px 0; background: none; border: 0; font: inherit; font-size: 10px; font-weight: 650; letter-spacing: .06em; color: #74647e; text-transform: uppercase; text-align: left; cursor: pointer; }
+.stat-section-toggle:hover { color: var(--accent); }
+.stat-section-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+.stat-section-toggle small { margin-left: auto; font-size: 11px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--muted); }
+.stat-section-toggle > svg { flex: 0 0 auto; transition: transform .18s ease; }
+.stat-section.is-open .stat-section-toggle > svg { transform: rotate(180deg); }
+.stat-testers { padding: 12px 18px; border-bottom: 1px solid var(--line); }
+.stat-testers.is-open { padding-bottom: 2px; }
+.stat-details > .stat-section-toggle { padding: 12px 18px; }
+.stat-details.is-open > .stat-section-toggle { padding-bottom: 8px; }
+.stat-tester-table { min-width: 480px; }
+.stat-tester-table th { padding: 12px 16px; background: none; }
+.stat-tester-table td { padding: 11px 16px; vertical-align: middle; }
+.stat-tester-table th:last-child, .stat-tester-table td:last-child { text-align: left; width: 120px; }
+.stat-tester-table .golive-assignee { min-width: 170px; }
+.stat-tester-table .muted { font-size: 13px; }
+.stat-tester-done { min-width: 230px; }
+.stat-tester-open { white-space: nowrap; }
+.stat-tester-open strong { font-size: 17px; font-weight: 650; font-variant-numeric: tabular-nums; color: #a3333d; }
+/* A count that has tickets behind it names them on hover, the same as a slice of the bar. */
+.stat-count { cursor: help; text-decoration: underline dotted transparent; text-underline-offset: 3px; transition: text-decoration-color .15s; }
+.stat-count:hover { text-decoration-color: currentColor; }
+/* One slice per ticket of the tester's own total so bar length reads as a count rather than a ratio. */
+.stat-stack { display: flex; width: 100%; max-width: 260px; height: 9px; border-radius: 999px; background: #efeaf6; overflow: hidden; }
+.stat-stack-part { display: block; height: 100%; }
+.stat-part-onDevices { background: #2f8a6f; }
+.stat-part-confirmed { background: #6fb9a0; }
+.stat-part-notNeeded { background: #9b8ec4; }
+.stat-part-open { background: #bdb6c7; }
+.stat-stack-counts { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 11px; margin-top: 7px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.stat-stack-total { white-space: nowrap; }
+.stat-stack-counts strong { font-size: 16px; font-weight: 650; color: #2f8a6f; }
+.stat-legend { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.stat-legend::before { content: ""; width: 8px; height: 8px; border-radius: 3px; flex: 0 0 auto; }
+.stat-legend-onDevices::before { background: #2f8a6f; }
+.stat-legend-confirmed::before { background: #6fb9a0; }
+.stat-legend-notNeeded::before { background: #9b8ec4; }
+.stat-legend-open::before { background: #bdb6c7; }
+/* Floats above everything, so a slice inside a scrolling table can still name its tickets. */
+.stat-tip { position: fixed; z-index: 50; transform: translate(-50%, calc(-100% - 10px)); width: max-content; max-width: 340px; padding: 11px 13px; border-radius: 11px; background: var(--raised, var(--surface)); border: 1px solid var(--line); box-shadow: 0 14px 36px #2a1b3d26; pointer-events: none; font-size: 12px; }
+.stat-tip strong { display: block; margin-bottom: 7px; font-size: 11px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.stat-tip ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }
+.stat-tip li { display: flex; gap: 8px; line-height: 1.45; }
+.stat-tip b { flex: 0 0 auto; color: var(--accent); font-weight: 650; }
+.stat-tip p { margin: 7px 0 0; font-size: 11px; }
 .stat-selection { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 12px 18px; font-size: 13px; color: var(--muted); background: #fbf9fd; }
 .stat-selection span { display: inline-flex; align-items: center; gap: 7px; }
 .stat-selection strong { color: var(--accent); font-size: 14px; font-variant-numeric: tabular-nums; }
@@ -733,6 +780,8 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 .stat-table th:first-child, .stat-table td:first-child { padding-right: 0; }
 /* The report's last column holds a timestamp, not an action, so it keeps the text column width. */
 .stat-table th:last-child, .stat-table td:last-child { text-align: left; width: auto; }
+/* Enough room for a full name beside its avatar, so it does not break mid-word. */
+.stat-table .golive-assignee { min-width: 170px; }
 .stat-pick { width: 46px; text-align: center; }
 .stat-pick input { width: 17px; height: 17px; accent-color: var(--accent); cursor: pointer; }
 .stat-pick input:disabled { cursor: not-allowed; opacity: .45; }
@@ -753,9 +802,21 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
   .stat-chevron { order: 0; margin-left: auto; }
   .stat-release-progress { flex: 1 1 100%; order: 2; justify-items: stretch; }
   .stat-release-progress small { text-align: right; }
+  .stat-testers { padding-bottom: 14px; }
+  .stat-details > .stat-section-toggle { padding: 12px 16px; }
+  .stat-tester-table th { padding: 10px 14px; }
+  .stat-tester-table td { padding: 10px 14px; }
+  .stat-stack { max-width: none; }
   .stat-table thead { display: none; }
   .stat-table { display: block; min-width: 0; width: 100%; }
-  .stat-release-body .table-scroll { overflow: visible; }
+  /* Only the ticket table stacks into cards; the per-tester table keeps scrolling sideways,
+     against the blanket .table-scroll override phones apply to every other table. */
+  .stat-details .table-scroll { overflow: visible; }
+  .stat-testers .table-scroll { overflow-x: auto; }
+  /* The column headers are what make these numbers read as ticket counts, so they stay on phones
+     too, against the blanket thead/min-width overrides above. */
+  .stat-tester-table { min-width: 480px; }
+  .stat-tester-table thead { display: table-header-group; }
   .stat-table tbody { display: grid; gap: 10px; padding: 12px; }
   .stat-table tbody tr { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
   .stat-table td { display: block; border: 0; padding: 0; text-align: left; width: auto; }
@@ -887,6 +948,15 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 :root[data-theme="dark"] .stat-release-head:hover { background: #291942; }
 :root[data-theme="dark"] .stat-release-icon.done { background: #2e4638; color: #bae6da; }
 :root[data-theme="dark"] .stat-bar { background: #372c45; }
+:root[data-theme="dark"] /* How many tickets of this golive each tester has finished, :root[data-theme="dark"] counted per person, :root[data-theme="dark"] before the list itself. */
+/* Both sections of a golive fold away the same way; the chevron sits at the far right of each. */
+.stat-section-toggle { color: #c7bfcc; }
+:root[data-theme="dark"] .stat-tester-open strong { color: #e5abb0; }
+:root[data-theme="dark"] /* One slice per ticket of the tester's own total so bar length reads as a count rather than a ratio. */
+.stat-stack { background: #372c45; }
+:root[data-theme="dark"] .stat-stack-counts strong { color: #b2e5d6; }
+:root[data-theme="dark"] /* Floats above everything, :root[data-theme="dark"] so a slice inside a scrolling table can still name its tickets. */
+.stat-tip { box-shadow: 0 14px 36px #150e1e26; }
 :root[data-theme="dark"] .stat-selection { background: #2f223c; }
 :root[data-theme="dark"] .stat-row-check { color: #b2e5d6; }
 :root[data-theme="dark"] .stat-table tr.stat-row-done { background: #273c2f; }
@@ -902,6 +972,12 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 :root[data-theme="dark"] .styled-select-item[data-highlighted] { background: #34293f; }
 :root[data-theme="dark"] .modal-backdrop, :root[data-theme="dark"] .confirm-dialog::backdrop, :root[data-theme="dark"] .manual-golive-dialog::backdrop { background: #07050acc; }
 :root[data-theme="dark"] .toast { background: #3a2a4d; border: 1px solid #5a4672; box-shadow: 0 12px 32px #00000080; }
+/* The light grey of an untested slice would outshine the coloured ones on a dark surface,
+   reading as the most important part of the bar instead of the leftover it is. */
+:root[data-theme="dark"] .stat-part-open { background: #514860; }
+:root[data-theme="dark"] .stat-legend-open::before { background: #514860; }
+/* The per-tester table sits inside a card and carries no header band in either theme. */
+:root[data-theme="dark"] .stat-tester-table th { background: none; }
 
 /* Member management shares the account panel and both theme palettes. */
 .add-member { margin: 24px 0; padding-bottom: 24px; border-bottom: 1px solid var(--line); }

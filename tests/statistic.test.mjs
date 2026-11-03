@@ -23,3 +23,45 @@ assert.equal(markedAt({ ...base, doneAt: "2026-11-02T08:00:00.000Z" }), "2026-11
 assert.equal(markedAt(base), null);
 
 console.log("Statistic done-marks: ticks report the last tick, confirmations report the confirmation.");
+
+import { doneKindOf, tallyByTester } from "../app/lib/statistic.ts";
+
+const ticket = (assignee, assigneeUserId, doneAt, skippedAt = null, skipKind = "not-needed") =>
+  ({ assignee, assigneeUserId, doneAt, skippedAt, skipKind });
+
+const tally = tallyByTester([
+  ticket("Minh Anh", "u_anh", "2026-11-02T07:00:00.000Z"),
+  ticket("Minh Anh", "u_anh", null),
+  ticket("Minh Anh", "u_anh", "2026-11-02T03:00:00.000Z", "2026-11-02T03:00:00.000Z", "not-needed"),
+  ticket("Gia Bảo", "u_bao", null),
+  ticket("Gia Bảo", "u_bao", null),
+  // A ticket confirmed as tested is done, and is not a "không cần test".
+  ticket("Gia Bảo", "u_bao", "2026-11-02T08:00:00.000Z", "2026-11-02T08:00:00.000Z", "tested"),
+  ticket("", null, null),
+]);
+
+// Whoever has the most left to test leads; the no-tester bucket is always last.
+assert.deepEqual(tally.map(row => row.name), ["Gia Bảo", "Minh Anh", ""]);
+assert.deepEqual(tally[0], { name: "Gia Bảo", userId: "u_bao", done: 1, open: 2, total: 3, onDevices: 0, confirmed: 1, notNeeded: 0 });
+assert.deepEqual(tally[1], { name: "Minh Anh", userId: "u_anh", done: 2, open: 1, total: 3, onDevices: 1, confirmed: 0, notNeeded: 1 });
+assert.deepEqual(tally[2], { name: "", userId: null, done: 0, open: 1, total: 1, onDevices: 0, confirmed: 0, notNeeded: 0 });
+
+// The three done kinds add back up to done, and with open they span the tester's whole total,
+// so the four slices of the stacked bar can neither overflow nor leave a gap.
+for (const row of tally) {
+  assert.equal(row.onDevices + row.confirmed + row.notNeeded, row.done);
+  assert.equal(row.onDevices + row.confirmed + row.notNeeded + row.open, row.total);
+}
+
+// A ticket Done purely from device ticks carries no skip mark; the other two kinds do.
+assert.equal(doneKindOf(ticket("Minh Anh", "u_anh", "2026-11-02T07:00:00.000Z")), "onDevices");
+assert.equal(doneKindOf(ticket("Minh Anh", "u_anh", "x", "x", "tested")), "confirmed");
+assert.equal(doneKindOf(ticket("Minh Anh", "u_anh", "x", "x", "not-needed")), "notNeeded");
+
+// A tester whose account is only matched on a later ticket still names the whole group.
+const late = tallyByTester([ticket("Minh Anh", null, null), ticket("Minh Anh", "u_anh", null)]);
+assert.equal(late[0].userId, "u_anh");
+
+assert.deepEqual(tallyByTester([]), []);
+
+console.log("Statistic per-tester tally: counts, không-cần-test subtotal and ordering hold.");
