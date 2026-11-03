@@ -27,7 +27,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast }: { peopl
   const [pending, setPending] = useState<{ fileName: string; tickets: ImportedTicket[] } | null>(null), [releaseName, setReleaseName] = useState("");
   const [query, setQuery] = useState(""), [statusFilter, setStatusFilter] = useState("__all__");
   const [keyFilter, setKeyFilter] = useState(""), [summaryFilter, setSummaryFilter] = useState(""), [testerFilter, setTesterFilter] = useState("__all__");
-  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 } | null>(null);
+  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 } | null>({ key: "assignee", dir: 1 });
   const fileInput = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async (id = "") => {
