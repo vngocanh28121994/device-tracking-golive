@@ -383,3 +383,108 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 .device-brand-samsung { height: 24px; border-radius: 50%; background: #1428a0; color: #fff; font-size: 6.5px; font-weight: 800; letter-spacing: -.02em; }
 .device-brand-xiaomi { width: 28px; height: 28px; border-radius: 8px; background: #ff6900; color: #fff; font-size: 21px; font-weight: 700; letter-spacing: -.04em; padding-bottom: 2px; }
 .device-brand-oppo { color: #006b40; font-size: 14px; font-weight: 700; letter-spacing: -.04em; }
+
+/* Golive tickets */
+.golive-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; padding: 48px 24px; color: var(--muted); }
+.golive-empty svg { color: var(--accent); }
+.golive-empty h2 { margin: 4px 0 0; font-size: 18px; color: var(--ink, #302840); }
+.golive-empty p { margin: 0 0 8px; font-size: 13px; }
+.golive-release-bar { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; flex-wrap: wrap; }
+.golive-release-select { flex: 1 1 280px; max-width: 420px; }
+.golive-progress { font-size: 13px; color: var(--muted); }
+.golive-progress strong { color: var(--accent); font-size: 14px; }
+.golive-delete { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; }
+.golive-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-bottom: 18px; }
+.golive-stat { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; cursor: pointer; text-align: left; }
+.golive-stat strong { font-size: 20px; font-weight: 650; }
+.golive-stat:hover { border-color: #d6c8ea; }
+.golive-stat.active { border-color: var(--accent); background: var(--lavender); }
+.status-chip { display: inline-block; font-size: 11px; font-weight: 650; padding: 4px 9px; border-radius: 6px; color: #5c566a; background: #efedf2; }
+.status-progress { color: #2f5f9e; background: #e7f0fb; }
+.status-review { color: #70538c; background: #f2edf9; }
+.status-testing { color: #8a5a12; background: #fbf1df; }
+.status-done { color: #28715d; background: #e9f5ee; }
+.status-blocked { color: #a3333d; background: #fbe9ea; }
+.golive-table td { vertical-align: middle; }
+.golive-key { font-weight: 650; white-space: nowrap; color: var(--accent); font-size: 13px; }
+.golive-summary { font-size: 14px; min-width: 240px; overflow-wrap: anywhere; }
+.golive-file { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+.golive-preview { list-style: none; margin: 4px 0 18px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; font-size: 13px; display: grid; gap: 6px; max-height: 180px; overflow: auto; }
+.golive-preview strong { color: var(--accent); margin-right: 6px; }
+.muted { color: var(--muted); }
+.golive-mine { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted); cursor: pointer; }
+.golive-mine input { accent-color: var(--accent); width: 16px; height: 16px; }
+.golive-devices { min-width: 220px; }
+.golive-devices .muted { font-size: 12px; }
+.golive-checklist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.golive-checklist label { position: relative; display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+.golive-checklist label.readonly { cursor: default; }
+.golive-checklist label.checked { color: #28715d; }
+.golive-checklist input { position: absolute; opacity: 0; width: 18px; height: 18px; margin: 0; cursor: inherit; }
+.golive-check-box { flex: 0 0 18px; height: 18px; border: 1.5px solid #cbbfdb; border-radius: 5px; display: grid; place-items: center; background: var(--surface); color: #fff; }
+.golive-checklist label.checked .golive-check-box { background: #2f8a6f; border-color: #2f8a6f; }
+.golive-checklist label.readonly .golive-check-box { border-style: dashed; }
+.golive-checklist input:focus-visible + .golive-check-box { outline: 2px solid var(--accent); outline-offset: 2px; }
+.golive-checklist small { font-size: 11px; color: var(--muted); }
+.golive-table tr:has(.golive-checklist.complete) { background: #f6fbf8; }
+.golive-table .golive-assignee { min-width: 180px; }
+.golive-table td:nth-child(4) { min-width: 150px; }
+.golive-table th:last-child { text-align: left; }
+.signin-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px; margin-bottom: 24px; background: var(--lavender); border: 1px solid #ddd0f0; border-radius: 14px; }
+.signin-banner strong { font-size: 15px; }
+.signin-banner p { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+.signin-banner a { text-decoration: none; flex: 0 0 auto; }
+.golive-filters { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(200px, 2fr) minmax(200px, 1.4fr) auto; gap: 12px; align-items: end; margin-bottom: 14px; }
+.golive-filters label { display: grid; gap: 6px; font-size: 10px; font-weight: 650; letter-spacing: .06em; color: #74647e; }
+.golive-filters input { height: 42px; border: 1px solid var(--line); border-radius: 10px; padding: 0 12px; font: inherit; font-size: 14px; letter-spacing: 0; color: inherit; background: var(--surface); }
+.golive-filters input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.golive-clear { display: inline-flex; align-items: center; gap: 6px; height: 42px; }
+.golive-sort { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; padding: 0; font: inherit; color: inherit; letter-spacing: inherit; cursor: pointer; }
+.golive-sort svg { opacity: .45; }
+.golive-sort.active { color: var(--accent); }
+.golive-sort.active svg { opacity: 1; }
+@media (max-width: 760px) {
+  .golive-filters { grid-template-columns: 1fr 1fr; }
+  .golive-filters label:nth-child(2), .golive-filters label:nth-child(3) { grid-column: 1 / -1; }
+  .golive-filters input { font-size: 16px; }
+  .golive-table thead { display: table-header-group; }
+  .golive-table { min-width: 860px; }
+  .golive-table tbody tr { display: table-row; padding: 0; }
+  .golive-table td { display: table-cell; padding: 12px 14px; border-top: 1px solid #f0ecf3; }
+  .table-panel:has(.golive-table) .table-scroll { overflow-x: auto; }
+}
+.golive-complete { display: inline-flex; align-items: center; gap: 7px; margin-left: auto; }
+.golive-complete + .golive-delete, .golive-completed + .golive-delete { margin-left: 0; }
+.golive-completed { display: inline-flex; align-items: center; gap: 7px; margin-left: auto; padding: 8px 12px; border-radius: 10px; background: #e9f5ee; color: #28715d; font-size: 13px; font-weight: 600; }
+.golive-warning { max-width: 720px; width: min(720px, calc(100vw - 32px)); }
+.golive-warning-head { display: flex; gap: 12px; align-items: flex-start; }
+.golive-warning-head svg { color: #c2410c; flex: 0 0 auto; margin-top: 3px; }
+.golive-warning-head p { margin: 6px 0 0; font-size: 13px; color: var(--muted); }
+.golive-warning-list { max-height: min(50vh, 420px); overflow: auto; border: 1px solid var(--line); border-radius: 12px; margin-bottom: 18px; }
+.golive-warning-list table { min-width: 0; }
+.golive-warning-list th { position: sticky; top: 0; padding: 10px 14px; }
+.golive-warning-list td { padding: 10px 14px; vertical-align: top; }
+.golive-warning-list th:last-child, .golive-warning-list td:last-child { text-align: left; width: auto; white-space: nowrap; }
+@media (max-width: 760px) {
+  .golive-warning-list thead { display: table-header-group; }
+  .golive-warning-list tbody tr { display: table-row; }
+}
+.golive-warning .modal-actions { justify-content: flex-end; }
+.golive-tabs { display: inline-flex; margin-bottom: 18px; }
+.golive-tabs button { display: inline-flex; align-items: center; gap: 6px; }
+.golive-back { display: inline-flex; align-items: center; gap: 6px; }
+.golive-release-title { margin: 0; font-size: 18px; font-weight: 650; }
+.golive-history-note { margin: 0 0 12px; font-size: 13px; color: var(--muted); }
+.golive-history { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.golive-history button { width: 100%; display: flex; align-items: center; gap: 14px; padding: 14px 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.golive-history button:hover { border-color: #d6c8ea; background: #fcfaff; }
+.golive-history button > svg { color: var(--muted); flex: 0 0 auto; }
+.golive-history-icon { width: 38px; height: 38px; flex: 0 0 38px; border-radius: 10px; display: grid; place-items: center; background: #e9f5ee; color: #28715d; }
+.golive-history-main { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.golive-history-main strong { font-size: 14px; font-weight: 650; overflow-wrap: anywhere; }
+.golive-history-main small { font-size: 12px; color: var(--muted); }
+.golive-history-count { font-size: 13px; color: var(--muted); white-space: nowrap; }
+.golive-checklist small.golive-warn { color: #a3333d; font-weight: 600; }
+.golive-checklist label { flex-wrap: wrap; row-gap: 2px; }
+.golive-checklist label small { flex-basis: 100%; padding-left: 26px; }
+.golive-devices { min-width: 240px; }

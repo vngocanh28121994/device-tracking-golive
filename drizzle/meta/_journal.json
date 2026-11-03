@@ -43,6 +43,34 @@
       "when": 1792911058954,
       "tag": "0005_acoustic_microbe",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1793673443375,
+      "tag": "0006_optimal_iceman",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1793674001351,
+      "tag": "0007_brainy_celestials",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1793674893579,
+      "tag": "0008_overjoyed_sugar_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1793675507053,
+      "tag": "0009_mean_hercules",
+      "breakpoints": true
     }
   ]
 }

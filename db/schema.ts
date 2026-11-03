@@ -61,3 +61,39 @@ export const teamsDeliveries = sqliteTable("teams_deliveries", {
   createdAt: text("created_at").notNull(),
   sentAt: text("sent_at"),
 });
+
+export const goliveReleases = sqliteTable("golive_releases", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  createdBy: text("created_by").notNull(),
+  createdAt: text("created_at").notNull(),
+  completedAt: text("completed_at"),
+  completedBy: text("completed_by"),
+});
+
+export const goliveTickets = sqliteTable("golive_tickets", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  releaseId: text("release_id").notNull().references(() => goliveReleases.id),
+  issueKey: text("issue_key").notNull(),
+  summary: text("summary").notNull(),
+  assignee: text("assignee").notNull().default(""),
+  assigneeUserId: text("assignee_user_id"),
+  status: text("status").notNull().default("To Do"),
+  updatedAt: text("updated_at").notNull(),
+  doneAt: text("done_at"),
+}, table => [index("golive_tickets_release_id_idx").on(table.releaseId)]);
+
+export const goliveDeviceChecks = sqliteTable("golive_device_checks", {
+  ticketId: integer("ticket_id").notNull().references(() => goliveTickets.id),
+  deviceId: text("device_id").notNull().references(() => devices.id),
+  deviceName: text("device_name").notNull(),
+  checkedByUserId: text("checked_by_user_id").notNull(),
+  checkedAt: text("checked_at").notNull(),
+}, table => [primaryKey({ columns: [table.ticketId, table.deviceId] })]);
+
+// Every device a tester held while the ticket was open, so handing one over cannot silently finish it.
+export const goliveTicketDevices = sqliteTable("golive_ticket_devices", {
+  ticketId: integer("ticket_id").notNull().references(() => goliveTickets.id),
+  deviceId: text("device_id").notNull().references(() => devices.id),
+  deviceName: text("device_name").notNull(),
+}, table => [primaryKey({ columns: [table.ticketId, table.deviceId] })]);
