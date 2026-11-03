@@ -203,6 +203,24 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 .history-error button { margin-top: 8px; }
 .nav-backdrop { display: none; }
 
+/* Collapsible sidebar (desktop and tablet only; phones use the drawer). */
+.sidebar-toggle { margin-top: 6px; }
+/* While the width animates, clip instead of re-wrapping the labels and note. */
+.sidebar.animated { overflow-x: hidden; }
+.nav-label { white-space: nowrap; }
+.sidebar.animated:not(.collapsed) .sidebar-note, .sidebar.animated:not(.collapsed) .sidebar-foot { min-width: 186px; }
+@media (min-width: 901px) and (prefers-reduced-motion: no-preference) {
+  .sidebar.animated { transition: width 180ms ease, flex-basis 180ms ease, padding 180ms ease; }
+}
+@media (min-width: 901px) {
+  .sidebar.collapsed { width: 76px; flex-basis: 76px; padding-inline: 12px; }
+  .sidebar.collapsed .brand { justify-content: center; padding-inline: 0; }
+  .sidebar.collapsed .brand > div:last-child, .sidebar.collapsed .nav-label, .sidebar.collapsed .sidebar-note, .sidebar.collapsed .sidebar-foot > div:last-child { display: none; }
+  .sidebar.collapsed .nav-item { justify-content: center; padding-inline: 0; }
+  .sidebar.collapsed .sidebar-foot { justify-content: center; padding-inline: 0; }
+}
+@media (max-width: 900px) { .sidebar-toggle { display: none; } }
+
 @media (max-width: 1150px) {
   .sidebar { width: 222px; flex-basis: 222px; padding-inline: 14px; }
   .brand { padding-inline: 4px; gap: 9px; }
