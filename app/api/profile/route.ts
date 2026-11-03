@@ -1,8 +1,8 @@
 import { env } from "cloudflare:workers";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { getChatGPTUser } from "../../chatgpt-auth";
 import { getDb } from "../../../db";
-import { userProfiles } from "../../../db/schema";
+import { devices, userProfiles } from "../../../db/schema";
 import { avatarUrl, decodeAvatar } from "../../lib/avatar";
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { "Cache-Control": "private, no-store" } });
 
@@ -49,8 +49,16 @@ export async function POST(request: Request) {
       avatarKey = createdKey;
     } else if (bytes === null) avatarKey = "";
     const updatedAt = new Date().toISOString();
-    await db.insert(userProfiles).values({ userId: user.userId, email: user.email, displayName, avatarKey, updatedAt })
-      .onConflictDoUpdate({ target: userProfiles.userId, set: { email: user.email, displayName, avatarKey, updatedAt } });
+    await db.batch([
+      db.update(devices).set({ holder: displayName, holderUserId: user.userId }).where(sql`
+        ${devices.holderUserId} = ${user.userId}
+        OR (${devices.holderUserId} IS NULL
+          AND ${devices.holder} = (SELECT display_name FROM user_profiles WHERE user_id = ${user.userId})
+          AND (SELECT count(*) FROM user_profiles WHERE display_name = ${devices.holder}) = 1)
+      `),
+      db.insert(userProfiles).values({ userId: user.userId, email: user.email, displayName, avatarKey, updatedAt })
+        .onConflictDoUpdate({ target: userProfiles.userId, set: { email: user.email, displayName, avatarKey, updatedAt } }),
+    ]);
     if (saved?.avatarKey && saved.avatarKey !== avatarKey) await env.BUCKET?.delete("avatars/" + saved.avatarKey).catch(() => {});
     return json({ profile: { userId: user.userId, email: user.email, displayName, configured: true, avatar: avatarUrl(avatarKey) } });
   } catch {

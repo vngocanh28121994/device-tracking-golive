@@ -71,6 +71,13 @@
       "when": 1793675507053,
       "tag": "0009_mean_hercules",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1793677380115,
+      "tag": "0010_sync-holder-identities",
+      "breakpoints": true
     }
   ]
 }

@@ -48,7 +48,10 @@ export async function GET() {
     const profiles = await db.select({userId:userProfiles.userId,displayName:userProfiles.displayName,avatarKey:userProfiles.avatarKey}).from(userProfiles);
     // Legacy holders have no account ID. Match only a unique name; explicit manual loans use "".
     const resolved = active.map(item => {
-      if (item.holderUserId !== null) return item;
+      if (item.holderUserId !== null) {
+        const profile = profiles.find(person => person.userId === item.holderUserId);
+        return profile ? { ...item, holder: profile.displayName } : item;
+      }
       const matches = profiles.filter(person => person.displayName === item.holder);
       return {...item,holderUserId:matches.length === 1 ? matches[0].userId : null};
     });
