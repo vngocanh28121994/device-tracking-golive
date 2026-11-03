@@ -1,5 +1,5 @@
 import { and, desc, eq, gte, lt } from "drizzle-orm";
-import { getChatGPTUser } from "../../../chatgpt-auth";
+import { requireMember } from "../../../lib/member-access";
 import { getDb } from "../../../../db";
 import { deviceMovements, devices } from "../../../../db/schema";
 
@@ -7,7 +7,8 @@ import { historyDateBounds } from "../../../lib/history-dates";
 
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { "Cache-Control": "private, no-store" } });
 export async function GET(request: Request) {
-  if (!await getChatGPTUser()) return json({ error: "Vui lòng đăng nhập để xem lịch sử." }, 401);
+  const access = await requireMember();
+  if ("response" in access) return access.response;
   const params = new URL(request.url).searchParams;
   const deviceId = params.get("deviceId") || "";
   const rawCursor = params.get("before");

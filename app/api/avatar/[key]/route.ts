@@ -1,11 +1,12 @@
 import { env } from "cloudflare:workers";
 import { eq } from "drizzle-orm";
-import { getChatGPTUser } from "../../../chatgpt-auth";
+import { requireMember } from "../../../lib/member-access";
 import { getDb } from "../../../../db";
 import { userProfiles } from "../../../../db/schema";
 
 export async function GET(_request: Request, context: { params: Promise<{ key: string }> }) {
-  if (!await getChatGPTUser()) return new Response(null, { status: 401 });
+  const access = await requireMember();
+  if ("response" in access) return access.response;
   const { key } = await context.params;
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jpg$/.test(key)) return new Response(null, { status: 404 });
   try {

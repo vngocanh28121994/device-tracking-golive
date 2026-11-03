@@ -827,3 +827,22 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 :root[data-theme="dark"] .styled-select-item[data-highlighted] { background: #34293f; }
 :root[data-theme="dark"] .modal-backdrop, :root[data-theme="dark"] .confirm-dialog::backdrop, :root[data-theme="dark"] .manual-golive-dialog::backdrop { background: #07050acc; }
 :root[data-theme="dark"] .toast { background: #3a2a4d; border: 1px solid #5a4672; box-shadow: 0 12px 32px #00000080; }
+
+/* Member management shares the account panel and both theme palettes. */
+.add-member { margin: 24px 0; padding-bottom: 24px; border-bottom: 1px solid var(--line); }
+.add-member h3 { font-size: 16px; margin: 0 0 16px; }
+.add-member label { display: block; margin-bottom: 8px; font-weight: 600; }
+.add-member-controls { display: flex; gap: 12px; align-items: stretch; }
+.add-member-controls input { min-width: 0; flex: 1; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; }
+.add-member-controls .primary-button { white-space: nowrap; min-height: 44px; }
+.add-member p { line-height: 1.6; margin-top: 10px; }
+.pending-members { margin-top: 16px; overflow-wrap: anywhere; }
+.pending-members summary { cursor: pointer; padding: 10px 0; }
+.pending-members ul { padding-left: 20px; line-height: 1.8; }
+.access-denied { max-width: 560px; margin: 60px auto; padding: 24px; }
+.access-denied p { line-height: 1.7; margin: 16px 0 24px; }
+@media (max-width: 600px) {
+ .add-member-controls { flex-direction: column; }
+ .add-member-controls input { font-size: 16px; }
+ .access-denied { margin: 24px 16px; }
+}

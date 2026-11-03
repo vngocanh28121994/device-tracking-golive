@@ -1,5 +1,7 @@
-
+import { requireMember } from "../lib/member-access";
 export async function POST(request: Request) {
+  const access = await requireMember();
+  if ("response" in access) return access.response;
   let id: unknown = null;
   const result = (value: unknown) => Response.json({ jsonrpc: "2.0", id, result: value }, { headers: { "Cache-Control": "private, no-store" } });
   try {

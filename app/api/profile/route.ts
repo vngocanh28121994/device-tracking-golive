@@ -1,22 +1,27 @@
 import { env } from "cloudflare:workers";
 import { eq, sql } from "drizzle-orm";
-import { getChatGPTUser } from "../../chatgpt-auth";
+import { requireMember } from "../../lib/member-access";
 import { getDb } from "../../../db";
-import { devices, userProfiles } from "../../../db/schema";
+import { devices, members, userProfiles } from "../../../db/schema";
+import { memberEmail } from "../../lib/member-email";
 import { avatarUrl, decodeAvatar } from "../../lib/avatar";
 import { canManageAccountRoles, validRole } from "../../lib/roles";
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { "Cache-Control": "private, no-store" } });
 
 export async function GET(request: Request) {
-  const user = await getChatGPTUser();
-  if (!user) return json({ error: "Vui lòng đăng nhập để sử dụng trang." }, 401);
+  const access = await requireMember();
+  if ("response" in access) return access.response;
+  const user = access.user;
   try {
     const db = getDb();
     if (new URL(request.url).searchParams.get("list") === "1") {
       const rows = await db.select().from(userProfiles);
       const accounts = rows.map(row => ({ userId: row.userId, email: row.email, displayName: row.displayName, role: row.role, avatar: avatarUrl(row.avatarKey) }));
       accounts.sort((a, b) => a.displayName.localeCompare(b.displayName, "vi"));
-      return json({ accounts, canManageRoles: canManageAccountRoles(rows.find(row => row.userId === user.userId)?.role, user.email) });
+      const canManageRoles = canManageAccountRoles(rows.find(row => row.userId === user.userId)?.role, user.email);
+      const pendingMembers = canManageRoles ? (await db.select({ email: members.email }).from(members))
+        .filter(member => !rows.some(row => row.email.toLowerCase() === member.email)).map(member => member.email).sort() : [];
+      return json({ accounts, canManageRoles, pendingMembers });
     }
     const [saved] = await db.select().from(userProfiles).where(eq(userProfiles.userId, user.userId)).limit(1);
     return json({ profile: { userId: user.userId, email: user.email, displayName: saved?.displayName ?? "", suggestedName: user.fullName ?? "", configured: Boolean(saved), role: saved?.role || "", avatar: avatarUrl(saved?.avatarKey || "") } });
@@ -24,15 +29,27 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const user = await getChatGPTUser();
-  if (!user) return json({ error: "Vui lòng đăng nhập để sử dụng trang." }, 401);
+  const access = await requireMember();
+  if ("response" in access) return access.response;
+  const user = access.user;
   let createdKey = "";
   try {
     const text = await request.text();
     if (text.length > 100000) return json({ error: "Ảnh quá lớn. Hãy chọn lại ảnh." }, 413);
-    let body: { action?: unknown; userId?: unknown; role?: unknown; displayName?: unknown; avatar?: unknown };
+    let body: { action?: unknown; userId?: unknown; role?: unknown; displayName?: unknown; avatar?: unknown; email?: unknown };
     try { body = JSON.parse(text); } catch { return json({ error: "Dữ liệu hồ sơ không hợp lệ." }, 400); }
     if (!body || typeof body !== "object") return json({ error: "Dữ liệu hồ sơ không hợp lệ." }, 400);
+    if (body.action === "add-member") {
+      const db = getDb();
+      const [actor] = await db.select().from(userProfiles).where(eq(userProfiles.userId, user.userId));
+      if (!canManageAccountRoles(actor?.role, user.email)) return json({ error: "Chỉ người quản trị hoặc Manager được thêm người dùng." }, 403);
+      if (!request.headers.get("Content-Type")?.includes("application/json") || (request.headers.get("Origin") && request.headers.get("Origin") !== new URL(request.url).origin)) return json({ error: "Yêu cầu không hợp lệ." }, 403);
+      const email = memberEmail(body.email);
+      if (!email) return json({ error: "Hãy nhập email hợp lệ." }, 400);
+      const inserted = await db.insert(members).values({ email, addedBy: user.userId, createdAt: new Date().toISOString() }).onConflictDoNothing().returning({ email: members.email });
+      if (!inserted.length) return json({ error: "Email này đã được cấp quyền truy cập." }, 409);
+      return json({ email }, 201);
+    }
     if (body.action === "assign-role") {
       const db = getDb();
       const [actor] = await db.select().from(userProfiles).where(eq(userProfiles.userId, user.userId));

@@ -1,5 +1,5 @@
 import { and, eq, inArray } from "drizzle-orm";
-import { getChatGPTUser } from "../../chatgpt-auth";
+import { requireMember } from "../../lib/member-access";
 import { getDb } from "../../../db";
 import { deviceMovements, devices, userProfiles } from "../../../db/schema";
 import { avatarUrl } from "../../lib/avatar";
@@ -35,7 +35,8 @@ async function insertInitialDevices(db: ReturnType<typeof getDb>, now: string) {
 }
 
 export async function GET() {
-  if (!await getChatGPTUser()) return error("Vui lòng đăng nhập để sử dụng trang.", 401);
+  const access = await requireMember();
+  if ("response" in access) return access.response;
   try {
     const db = getDb();
     const profileQuery = db.select({userId:userProfiles.userId,displayName:userProfiles.displayName,avatarKey:userProfiles.avatarKey,role:userProfiles.role}).from(userProfiles);
@@ -64,8 +65,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const user = await getChatGPTUser();
-  if (!user) return error("Vui lòng đăng nhập để sử dụng trang.", 401);
+  const access = await requireMember();
+  if ("response" in access) return access.response;
+  const user = access.user;
   try {
     const body = await request.json() as Record<string, unknown>;
     const db = getDb();

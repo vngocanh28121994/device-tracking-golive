@@ -32,6 +32,7 @@ Receive/lend confirmations use a short catch-the-device interaction. The basket 
 - Keep search visible; mobile cards keep the default tester A–Z order without a sort picker (desktop sorts by column header). Column filters and release actions expand from labeled buttons.
 - Device rows and interactive controls need at least 44px touch targets. Form inputs and select triggers use 16px text; dialogs fit inside the viewport and scroll vertically.
 - Role assignment stacks each account above its role selector. Wrap long names, emails and fixVersions; preserve desktop tables above the mobile breakpoint.
+- Team managers add members by email in the account role panel. Use an inline labeled email form, stack the input and action on mobile, and put emails awaiting a saved profile behind a disclosure. Membership is checked on the server before any data access.
 
 ## Dark mode
 

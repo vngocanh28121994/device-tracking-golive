@@ -25,6 +25,12 @@ export const dailyChecks = sqliteTable("daily_checks", {
   checkedAt: text("checked_at").notNull(),
 }, (table) => [primaryKey({ columns: [table.date, table.deviceId] })]);
 
+export const members = sqliteTable("members", {
+  email: text("email").primaryKey(),
+  addedBy: text("added_by").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
 export const userProfiles = sqliteTable("user_profiles", {
   userId: text("user_id").primaryKey(),
   email: text("email").notNull(),
