@@ -34,48 +34,37 @@ const inRelease = (column: typeof goliveDeviceChecks.ticketId | typeof goliveTic
   sql`${column} in (select ${goliveTickets.id} from ${goliveTickets} where ${goliveTickets.releaseId} = ${releaseId})`;
 
 // Loads a release and, while it is running, brings each open ticket up to date:
-// devices the tester holds now are added to the ticket's list (and stay there after a handover),
-// and a ticket becomes Done once every listed device is ticked. Done is sticky until a tick is removed.
+// a ticket becomes Done once the tester has ticked every device they hold right now.
+// Devices handed to someone else no longer count. Done is sticky until a tick is removed.
 // Pass ticketId to bring a single ticket up to date instead of the whole release.
 // Reads run in parallel and writes go out as one batch: every D1 call is a network round trip.
 async function loadRelease(db: Db, releaseId: string, now = new Date().toISOString(), ticketId?: number) {
-  if (!releaseId) return { tickets: [], held: new Map<string, { id: string; name: string; category: string }[]>(), checks: [], recorded: [] };
-  const scope = <T extends typeof goliveDeviceChecks.ticketId | typeof goliveTicketDevices.ticketId>(column: T) => ticketId === undefined ? inRelease(column, releaseId) : eq(column, ticketId);
-  const [rows, [release], profiles, deviceRows, checks, recorded] = await Promise.all([
+  if (!releaseId) return { tickets: [], held: new Map<string, { id: string; name: string; category: string }[]>(), checks: [] };
+  const [rows, [release], profiles, deviceRows, checks] = await Promise.all([
     db.select().from(goliveTickets).where(ticketId === undefined ? eq(goliveTickets.releaseId, releaseId) : eq(goliveTickets.id, ticketId)).orderBy(goliveTickets.id),
     db.select({ completedAt: goliveReleases.completedAt }).from(goliveReleases).where(eq(goliveReleases.id, releaseId)),
     db.select({ userId: userProfiles.userId, displayName: userProfiles.displayName }).from(userProfiles),
     activeDevices(db),
-    db.select().from(goliveDeviceChecks).where(scope(goliveDeviceChecks.ticketId)),
-    db.select().from(goliveTicketDevices).where(scope(goliveTicketDevices.ticketId)),
+    db.select().from(goliveDeviceChecks).where(ticketId === undefined ? inRelease(goliveDeviceChecks.ticketId, releaseId) : eq(goliveDeviceChecks.ticketId, ticketId)),
   ]);
   // Testers who create an account after the import are matched on every load.
   const tickets = rows.map(item => ({ ...item, assigneeUserId: item.assigneeUserId ?? (item.assignee ? matchAccount(profiles, item.assignee) : null) }));
   const testerIds = Array.from(new Set(tickets.flatMap(item => item.assigneeUserId ? [item.assigneeUserId] : [])));
   const held = devicesHeldBy(deviceRows, profiles, testerIds);
   if (release && !release.completedAt) {
-    const additions: typeof recorded = [];
-    for (const ticket of tickets) {
-      if (ticket.doneAt || !ticket.assigneeUserId) continue;
-      for (const device of held.get(ticket.assigneeUserId) || []) {
-        if (!recorded.some(item => item.ticketId === ticket.id && item.deviceId === device.id)) additions.push({ ticketId: ticket.id, deviceId: device.id, deviceName: device.name });
-      }
-    }
-    recorded.push(...additions);
     const doneIds: number[] = [];
     for (const ticket of tickets) {
-      if (ticket.doneAt) continue;
+      if (ticket.doneAt || !ticket.assigneeUserId) continue;
       const ticked = new Set(checks.filter(item => item.ticketId === ticket.id).map(item => item.deviceId));
-      const required = new Set([...recorded.filter(item => item.ticketId === ticket.id).map(item => item.deviceId), ...ticked]);
-      if (required.size > 0 && Array.from(required).every(id => ticked.has(id))) { ticket.doneAt = now; doneIds.push(ticket.id); }
+      const required = held.get(ticket.assigneeUserId) || [];
+      if (required.length > 0 && required.every(device => ticked.has(device.id))) { ticket.doneAt = now; doneIds.push(ticket.id); }
     }
-    // D1 caps bound parameters per statement, so writes go in small chunks.
+    // D1 caps bound parameters per statement, so updates go in chunks of one batch.
     const writes = [];
-    for (let i = 0; i < additions.length; i += 30) writes.push(db.insert(goliveTicketDevices).values(additions.slice(i, i + 30)).onConflictDoNothing());
     for (let i = 0; i < doneIds.length; i += 90) writes.push(db.update(goliveTickets).set({ doneAt: now }).where(inArray(goliveTickets.id, doneIds.slice(i, i + 90))));
     if (writes.length) await db.batch(writes as [typeof writes[number], ...typeof writes]);
   }
-  return { tickets, held, checks, recorded };
+  return { tickets, held, checks };
 }
 
 // The ticket and whether its release is completed, in one round trip.
@@ -107,8 +96,8 @@ export async function GET(request: Request) {
     // A release deleted by someone else falls back to the default one.
     const found = releases.some(item => item.id === requested);
     const releaseId = found ? requested : releases.find(item => !item.completedAt)?.id || "";
-    const { tickets, held, checks, recorded } = found && preloaded ? preloaded : await loadRelease(db, releaseId);
-    return Response.json({ releases, releaseId, tickets, devicesByUser: Object.fromEntries(held), checks, recorded }, noStore);
+    const { tickets, held, checks } = found && preloaded ? preloaded : await loadRelease(db, releaseId);
+    return Response.json({ releases, releaseId, tickets, devicesByUser: Object.fromEntries(held), checks }, noStore);
   } catch {
     return error("Không thể tải danh sách golive.", 500);
   }
@@ -160,31 +149,30 @@ export async function POST(request: Request) {
     }
     if (body.action === "toggle-check") {
       const ticketId = Number(body.ticketId), deviceId = clean(body.deviceId, 120);
-      const [[found], profiles, deviceRows, recordedRows] = await Promise.all([
+      const [[found], profiles, deviceRows] = await Promise.all([
         ticketWithRelease(db, ticketId),
         db.select({ userId: userProfiles.userId, displayName: userProfiles.displayName }).from(userProfiles),
         body.checked === false ? [] : activeDevices(db),
-        db.select({ id: goliveTicketDevices.deviceId, name: goliveTicketDevices.deviceName }).from(goliveTicketDevices).where(and(eq(goliveTicketDevices.ticketId, ticketId), eq(goliveTicketDevices.deviceId, deviceId))),
       ]);
       if (!found) return error("Không tìm thấy ticket.", 404);
       const { ticket, completedAt } = found;
       const tester = ticket.assigneeUserId ?? (ticket.assignee ? matchAccount(profiles, ticket.assignee) : null);
       if (tester !== user.userId) return error("Chỉ người test của ticket này mới được tích checklist.", 403);
       if (completedAt) return error("Đợt golive đã hoàn thành, không thể sửa checklist.", 409);
-      if (ticket.skippedAt) return error("Ticket đã được đánh dấu Done thủ công. Hãy thu hồi trước khi tích checklist.", 409);
+      if (ticket.skippedAt && ticket.skipKind !== "tested") return error("Ticket đã được đánh dấu không cần test. Hãy thu hồi trước khi tích checklist.", 409);
       if (body.checked === false) {
         await db.batch([
           db.delete(goliveDeviceChecks).where(and(eq(goliveDeviceChecks.ticketId, ticketId), eq(goliveDeviceChecks.deviceId, deviceId))),
-          db.update(goliveTickets).set({ doneAt: null }).where(eq(goliveTickets.id, ticketId)),
+          // A ticket confirmed as tested stays Done; ticks then only record which devices were used.
+          ...(ticket.skippedAt ? [] : [db.update(goliveTickets).set({ doneAt: null }).where(eq(goliveTickets.id, ticketId))]),
         ]);
       } else {
-        // A device handed over before it was ticked can still be ticked if it was tested in time.
-        const device = devicesHeldBy(deviceRows, profiles, [user.userId]).get(user.userId)?.find(item => item.id === deviceId) ?? recordedRows[0];
-        if (!device) return error("Thiết bị này không nằm trong danh sách test của ticket.", 409);
+        const device = devicesHeldBy(deviceRows, profiles, [user.userId]).get(user.userId)?.find(item => item.id === deviceId);
+        if (!device) return error("Bạn không còn cầm thiết bị này. Nếu đã test xong, hãy bấm “Đã test xong”.", 409);
         await db.insert(goliveDeviceChecks).values({ ticketId, deviceId, deviceName: device.name, checkedByUserId: user.userId, checkedAt: now }).onConflictDoNothing();
       }
-      const { tickets, recorded } = await loadRelease(db, ticket.releaseId, now, ticketId);
-      return Response.json({ doneAt: tickets[0]?.doneAt ?? null, recorded });
+      const { tickets } = await loadRelease(db, ticket.releaseId, now, ticketId);
+      return Response.json({ doneAt: tickets[0]?.doneAt ?? null });
     }
     if (body.action === "skip-test") {
       const ticketId = Number(body.ticketId), skipped = body.skipped !== false, kind = body.kind === "tested" ? "tested" : "not-needed";
@@ -201,9 +189,9 @@ export async function POST(request: Request) {
       const by = me?.displayName || user.displayName || user.email;
       // Undoing clears Done too; the next load marks it Done again if every device is already ticked.
       await db.update(goliveTickets).set(skipped ? { skippedAt: now, skippedBy: by, skipKind: kind, doneAt: now } : { skippedAt: null, skippedBy: null, skipKind: "not-needed", doneAt: null }).where(eq(goliveTickets.id, ticketId));
-      const { tickets, recorded } = await loadRelease(db, ticket.releaseId, now, ticketId);
+      const { tickets } = await loadRelease(db, ticket.releaseId, now, ticketId);
       const updated = tickets[0];
-      return Response.json({ doneAt: updated?.doneAt ?? null, skippedAt: updated?.skippedAt ?? null, skippedBy: updated?.skippedBy ?? null, skipKind: updated?.skipKind ?? "not-needed", recorded });
+      return Response.json({ doneAt: updated?.doneAt ?? null, skippedAt: updated?.skippedAt ?? null, skippedBy: updated?.skippedBy ?? null, skipKind: updated?.skipKind ?? "not-needed" });
     }
     if (body.action === "complete-release") {
       const releaseId = clean(body.releaseId, 60);

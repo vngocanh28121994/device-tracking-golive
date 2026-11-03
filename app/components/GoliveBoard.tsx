@@ -11,7 +11,6 @@ type Release = { id: string; name: string; source: string; fixVersion: string; c
 const MAX_HISTORY = 10;
 type Unfinished = { issueKey: string; summary: string; assignee: string };
 type Ticket = { id: number; releaseId: string; issueKey: string; summary: string; assignee: string; assigneeUserId: string | null; doneAt: string | null; skippedAt?: string | null; skippedBy?: string | null; skipKind?: string };
-type RecordedDevice = { ticketId: number; deviceId: string; deviceName: string };
 const REFRESH_MS = 60_000;
 type Person = { userId: string; displayName: string; avatar: string; role?: string };
 type SortKey = "issueKey" | "summary" | "assignee";
@@ -21,13 +20,13 @@ type DeviceCheck = { ticketId: number; deviceId: string; deviceName: string; che
 const statusClass = (status: string) => "status-chip " + (status === "Done" ? "status-done" : "status-blocked");
 const prettyTime = (iso: string) => new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Asia/Ho_Chi_Minh" }).format(new Date(iso));
 
-type GoliveData = { releases?: Release[]; releaseId?: string; tickets?: Ticket[]; devicesByUser?: Record<string, HeldDevice[]>; checks?: DeviceCheck[]; recorded?: RecordedDevice[]; error?: string };
+type GoliveData = { releases?: Release[]; releaseId?: string; tickets?: Ticket[]; devicesByUser?: Record<string, HeldDevice[]>; checks?: DeviceCheck[]; error?: string };
 // The last response outlives the component, so coming back to this page shows it at once while it refreshes.
 let lastData: GoliveData | null = null;
 
 export function GoliveBoard({ people, currentUserId, onError, onToast, onManageRoles }: { people: Person[]; currentUserId: string; onError: (message: string) => void; onToast: (message: string) => void; onManageRoles: () => void }) {
   const [releases, setReleases] = useState<Release[]>(lastData?.releases || []), [releaseId, setReleaseId] = useState(lastData?.releaseId || ""), [tickets, setTickets] = useState<Ticket[]>(lastData?.tickets || []);
-  const [devicesByUser, setDevicesByUser] = useState<Record<string, HeldDevice[]>>(lastData?.devicesByUser || {}), [checks, setChecks] = useState<DeviceCheck[]>(lastData?.checks || []), [recorded, setRecorded] = useState<RecordedDevice[]>(lastData?.recorded || []), [mineOnly, setMineOnly] = useState(false);
+  const [devicesByUser, setDevicesByUser] = useState<Record<string, HeldDevice[]>>(lastData?.devicesByUser || {}), [checks, setChecks] = useState<DeviceCheck[]>(lastData?.checks || []), [mineOnly, setMineOnly] = useState(false);
   const [loading, setLoading] = useState(!lastData), [busy, setBusy] = useState(false), [view, setView] = useState<"active" | "history">("active");
   const [unfinished, setUnfinished] = useState<Unfinished[] | null>(null);
   const [pending, setPending] = useState<{ fileName: string; tickets: ImportedTicket[] } | null>(null), [releaseName, setReleaseName] = useState("");
@@ -44,7 +43,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
       const data = await r.json() as GoliveData;
       if (!r.ok) throw new Error(data.error || "Không thể tải danh sách golive.");
       lastData = data;
-      setReleases(data.releases || []); setReleaseId(data.releaseId || ""); setTickets(data.tickets || []); setDevicesByUser(data.devicesByUser || {}); setChecks(data.checks || []); setRecorded(data.recorded || []);
+      setReleases(data.releases || []); setReleaseId(data.releaseId || ""); setTickets(data.tickets || []); setDevicesByUser(data.devicesByUser || {}); setChecks(data.checks || []);
     } catch (e) { onError(e instanceof Error ? e.message : "Không thể tải danh sách golive."); } finally { setLoading(false); }
   }, [onError]);
   // Reopen the release that was on screen; naming it also lets the server load it in parallel.
@@ -63,7 +62,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
 
   async function post(body: Record<string, unknown>) {
     const r = await fetch("/api/golive", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const data = await r.json() as { error?: string; releaseId?: string; count?: number; doneAt?: string | null; skippedAt?: string | null; skippedBy?: string | null; skipKind?: string; recorded?: RecordedDevice[]; release?: Release; unfinished?: Unfinished[] };
+    const data = await r.json() as { error?: string; releaseId?: string; count?: number; doneAt?: string | null; skippedAt?: string | null; skippedBy?: string | null; skipKind?: string; release?: Release; unfinished?: Unfinished[] };
     if (!r.ok) throw Object.assign(new Error(data.error || "Không thể lưu thay đổi."), { unfinished: data.unfinished });
     return data;
   }
@@ -96,7 +95,6 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
     try {
       const result = await post({ action: "toggle-check", ticketId: ticket.id, deviceId: device.id, checked });
       setTickets(current => current.map(item => item.id === ticket.id ? { ...item, doneAt: result.doneAt ?? null } : item));
-      if (result.recorded) setRecorded(current => [...current.filter(item => item.ticketId !== ticket.id), ...result.recorded!]);
     }
     catch (e) { setChecks(previous); onError(e instanceof Error ? e.message : "Không thể cập nhật checklist."); }
   }
@@ -113,7 +111,6 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
     try {
       const result = await post({ action: "skip-test", ticketId: ticket.id, skipped, kind });
       setTickets(current => current.map(item => item.id === ticket.id ? { ...item, doneAt: result.doneAt ?? null, skippedAt: result.skippedAt ?? null, skippedBy: result.skippedBy ?? null, skipKind: result.skipKind } : item));
-      if (result.recorded) setRecorded(current => [...current.filter(item => item.ticketId !== ticket.id), ...result.recorded!]);
       onToast(!skipped ? "Đã thu hồi đánh dấu cho " + ticket.issueKey : kind === "tested" ? "Đã xác nhận test xong " + ticket.issueKey : "Đã đánh dấu " + ticket.issueKey + " không cần test");
     } catch (e) { onError(e instanceof Error ? e.message : "Không thể cập nhật ticket."); } finally { setBusy(false); }
   }
@@ -162,19 +159,21 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
   }
 
   // A completed release is a snapshot: only the devices ticked at completion, not today's holdings.
-  // While running: every device recorded for the ticket, plus anything ticked or held now.
-  // "optional" marks a device received after the ticket was already Done; it is not required.
+  // While running: the devices the tester holds now, plus ticked ones they have since handed over.
+  // A device handed over before it was ticked drops off; "optional" marks one received after Done.
   const ticketDevices = (ticket: Ticket) => {
     const ticked = checks.filter(item => item.ticketId === ticket.id);
     if (current?.completedAt) return ticked.map(item => ({ id: item.deviceId, name: item.deviceName, handedOver: false, optional: false }));
     const held = ticket.assigneeUserId ? devicesByUser[ticket.assigneeUserId] || [] : [];
     const list = new Map<string, { id: string; name: string; handedOver: boolean; optional: boolean }>();
-    for (const item of [...recorded.filter(row => row.ticketId === ticket.id), ...ticked]) list.set(item.deviceId, { id: item.deviceId, name: item.deviceName, handedOver: !held.some(device => device.id === item.deviceId), optional: false });
+    for (const item of ticked) list.set(item.deviceId, { id: item.deviceId, name: item.deviceName, handedOver: !held.some(device => device.id === item.deviceId), optional: false });
     for (const device of held) if (!list.has(device.id)) list.set(device.id, { id: device.id, name: device.name, handedOver: false, optional: !!ticket.doneAt });
     return Array.from(list.values());
   };
   // The tester or a Manager may mark a CSV ticket as not needing a test while the release is running.
   const canSkip = (ticket: Ticket) => !manual && !current?.completedAt && (ticket.assigneeUserId === currentUserId || people.find(person => person.userId === currentUserId)?.role === "Manager");
+  // "Đã test xong" keeps the checklist below the badge so the devices actually tested stay visible.
+  const skipBadge = (ticket: Ticket) => <div className={"golive-skipped" + (ticket.skipKind === "tested" ? " golive-skipped-tested" : "")}><span className="golive-skipped-label"><strong>{ticket.skipKind === "tested" ? <><CheckCircle2 size={16} aria-hidden="true" /> Đã test xong</> : <><Ban size={16} aria-hidden="true" /> Không cần test</>}</strong>{ticket.skippedBy && <small>{ticket.skipKind === "tested" ? "Xác nhận" : "Đánh dấu"} bởi {ticket.skippedBy}</small>}</span>{canSkip(ticket) && <button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => void setSkipped(ticket, false)}><Undo2 size={14} /> Thu hồi</button>}</div>;
   const isChecked = (ticket: Ticket, deviceId: string) => checks.some(item => item.ticketId === ticket.id && item.deviceId === deviceId);
   // Done is decided by the server and stays Done until a tick is removed.
   const fullyTested = (ticket: Ticket) => !!ticket.doneAt;
@@ -259,19 +258,19 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
           <td className="golive-summary">{ticket.summary || <span className="muted">(không có tên)</span>}</td></>}
           <td className="golive-assignee">{ticket.assignee ? <HolderIdentity name={ticket.assignee} avatar={people.find(person => person.userId === ticket.assigneeUserId)?.avatar || ""} role={people.find(person => person.userId === ticket.assigneeUserId)?.role} /> : <span className="muted">Chưa có người test</span>}</td>
           <td className="golive-ticket-status"><span className={statusClass(statusOf(ticket))}>{statusOf(ticket)}</span></td>
-          <td className="golive-devices">{ticket.skippedAt ? <div className="golive-skipped"><span className="golive-skipped-label"><strong>{ticket.skipKind === "tested" ? <><CheckCircle2 size={16} aria-hidden="true" /> Đã test xong</> : <><Ban size={16} aria-hidden="true" /> Không cần test</>}</strong>{ticket.skippedBy && <small>{ticket.skipKind === "tested" ? "Xác nhận" : "Đánh dấu"} bởi {ticket.skippedBy}</small>}</span>{canSkip(ticket) && <button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => void setSkipped(ticket, false)}><Undo2 size={14} /> Thu hồi</button>}</div> : <>{!ticket.assignee ? <span className="muted">Chưa có người test</span> : !ticket.assigneeUserId ? <span className="muted">“{ticket.assignee}” chưa khớp tài khoản nào</span> : (() => {
-            const list = ticketDevices(ticket), mine = ticket.assigneeUserId === currentUserId && !current?.completedAt && !ticket.skippedAt;
+          <td className="golive-devices">{ticket.skippedAt && ticket.skipKind !== "tested" ? skipBadge(ticket) : <>{ticket.skippedAt && skipBadge(ticket)}{!ticket.assignee ? <span className="muted">Chưa có người test</span> : !ticket.assigneeUserId ? <span className="muted">“{ticket.assignee}” chưa khớp tài khoản nào</span> : (() => {
+            const list = ticketDevices(ticket), mine = ticket.assigneeUserId === currentUserId && !current?.completedAt && !(ticket.skippedAt && ticket.skipKind !== "tested");
             if (list.length === 0) return <span className="muted">Người test chưa cầm thiết bị nào</span>;
             return <div className="golive-device-group">
               <div className="golive-device-count">{list.filter(device => isChecked(ticket, device.id)).length}/{list.length} thiết bị đã test</div>
               <ul className={"golive-checklist " + (fullyTested(ticket) ? "complete" : "")}>{list.map(device => {
                 const checked = isChecked(ticket, device.id);
                 const DeviceIcon = /ipad|tablet|máy tính bảng/i.test(device.name) ? Tablet : /laptop|macbook/i.test(device.name) ? Laptop : Smartphone;
-                const detail = device.handedOver ? (checked ? "Đã test · đã bàn giao" : "Đã bàn giao · chưa test") : device.optional && !checked ? "Máy mới · không bắt buộc" : checked ? "Đã test" : "Chưa test";
+                const detail = device.handedOver ? "Đã test · đã bàn giao" : device.optional && !checked ? "Máy mới · không bắt buộc" : checked ? "Đã test" : "Chưa test";
                 return <li key={device.id}><label className={(checked ? "checked " : "") + (mine ? "" : "readonly")} title={mine ? "" : current?.completedAt ? "Đợt golive đã hoàn thành" : "Chỉ " + ticket.assignee + " mới tích được"}>
                   <input type="checkbox" aria-label={(manual ? ticket.assignee : ticket.issueKey) + " · " + device.name} checked={checked} disabled={!mine} onChange={e => void toggleCheck(ticket, device, e.target.checked)} />
                   <DeviceIcon className="golive-device-icon" size={19} aria-hidden="true" />
-                  <span className="golive-device-copy"><span className="golive-device-name">{device.name}</span><small className={device.handedOver && !checked ? "golive-warn" : ""}>{detail}</small></span>
+                  <span className="golive-device-copy"><span className="golive-device-name">{device.name}</span><small>{detail}</small></span>
                   <span className="golive-check-box" aria-hidden="true">{checked && <Check size={13} strokeWidth={3} />}</span>
                 </label></li>;
               })}</ul>
