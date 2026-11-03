@@ -29,6 +29,13 @@ export function parseCsv(text: string) {
 
 export const normalizeName = (name: string) => name.normalize("NFC").trim().replace(/\s+/g, " ").toLocaleLowerCase("vi");
 
+// A tester name maps to an account only when exactly one display name matches, so a team with two
+// people of the same name never has a ticket silently attributed to one of them.
+export function matchAccount(profiles: { userId: string; displayName: string }[], name: string) {
+  const matches = profiles.filter(person => normalizeName(person.displayName) === normalizeName(name));
+  return matches.length === 1 ? matches[0].userId : null;
+}
+
 // Jira exports repeat some headers; the first matching column wins.
 // The tester comes from the Quality Engineer custom field, falling back to Assignee.
 export function ticketsFromCsv(text: string): ImportedTicket[] {

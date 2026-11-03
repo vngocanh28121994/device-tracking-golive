@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Ban, CheckCircle2, ChevronDown, ListChecks, Rocket, X } from "lucide-react";
+import { Ban, Bell, CheckCircle2, ChevronDown, ListChecks, Rocket, X } from "lucide-react";
 import { HolderIdentity } from "./HolderIdentity";
 import { LoadingState } from "./LoadingState";
 import { doneKindOf, markedAt, markedBy, markedHow, tallyByTester, TesterTally } from "../lib/statistic";
@@ -26,7 +26,7 @@ const BAR_PARTS = [
   { kind: "open", short: "chưa test", label: "ticket chưa test" },
 ] as const;
 
-export function StatisticBoard({ people }: { people: Person[] }) {
+export function StatisticBoard({ people, onToast, onError }: { people: Person[]; onToast: (message: string) => void; onError: (message: string) => void }) {
   const [releases, setReleases] = useState<Release[] | null>(null), [error, setError] = useState("");
   const [open, setOpen] = useState<string[]>([]);
   const [ticketsByRelease, setTicketsByRelease] = useState<Record<string, Ticket[]>>({});
@@ -35,6 +35,24 @@ export function StatisticBoard({ people }: { people: Person[] }) {
   const [collapsedTesters, setCollapsedTesters] = useState<string[]>([]);
   const [collapsedDetails, setCollapsedDetails] = useState<string[]>([]);
   const [tip, setTip] = useState<Tip | null>(null);
+  const [sending, setSending] = useState("");
+
+  // Reminds each ticked ticket's tester; the server groups a tester's tickets into one notification.
+  async function notifyUntested(releaseId: string, ticketIds: number[]) {
+    setSending(releaseId);
+    setTip(null);
+    try {
+      const r = await fetch("/api/statistic", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "notify-untested", releaseId, ticketIds }) });
+      const data = await r.json() as { notified?: number; tickets?: number; unmatched?: string[]; alreadyDone?: number; error?: string };
+      if (!r.ok) throw new Error(data.error || "Không thể gửi thông báo.");
+      const extra = [
+        data.alreadyDone ? data.alreadyDone + " ticket đã Done nên bỏ qua" : "",
+        data.unmatched?.length ? data.unmatched.length + " ticket chưa khớp tài khoản" : "",
+      ].filter(Boolean).join(", ");
+      onToast("Đã gửi thông báo tới " + data.notified + " người test cho " + data.tickets + " ticket" + (extra ? " (" + extra + ")" : "") + " 🔔");
+    } catch (e) { onError(e instanceof Error ? e.message : "Không thể gửi thông báo."); }
+    finally { setSending(""); }
+  }
 
   useEffect(() => { try { const raw = localStorage.getItem(SELECTION_KEY); if (raw) setSelected(JSON.parse(raw) as Record<string, number[]>); } catch { /* a corrupt note just starts empty */ } }, []);
   const writeSelected = useCallback((next: Record<string, number[]>) => {
@@ -216,6 +234,13 @@ export function StatisticBoard({ people }: { people: Person[] }) {
                       : <span className="muted">{ticket.testedDevices > 0 ? "Đã tích " + ticket.testedDevices + " thiết bị, chưa đủ" : "Chưa đánh dấu"}</span>}</td>
                   </tr>;
                 })}</tbody></table></div>
+                {picked.length > 0 && <div className="stat-notify">
+                  <span>Nhắc người test của <strong>{picked.length}</strong> {rowLabel} đã chọn</span>
+                  <button type="button" className="primary-button" disabled={sending === release.id}
+                    onClick={() => void notifyUntested(release.id, picked)}>
+                    <Bell size={17} /> {sending === release.id ? "Đang gửi..." : "Gửi thông báo"}
+                  </button>
+                </div>}
                 </div>}
                 </div>
               </>}

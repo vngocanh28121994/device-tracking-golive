@@ -54,3 +54,24 @@ export function tallyByTester(tickets: Assigned[]): TesterTally[] {
   return [...groups.values()].sort((a, b) =>
     (a.name ? 0 : 1) - (b.name ? 0 : 1) || b.open - a.open || a.name.localeCompare(b.name, "vi"));
 }
+
+
+// One reminder per tester, however many of their tickets the Manager ticked: a person with four
+// untested tickets gets one notification naming all four, not four notifications.
+export type UntestedNotice = { userId: string; issueKeys: string[]; body: string };
+
+export const untestedBody = (issueKeys: string[]) =>
+  "Ticket " + issueKeys.join(", ") + " chưa được test sau golive. Vui lòng phản hồi trong thời gian sớm nhất.";
+
+// Tickets whose tester matches no account are dropped: there is nobody to notify. Keys keep the
+// order they were given, which is the report's own order, so a reminder reads like the table.
+export function untestedNotices(tickets: { userId: string | null; issueKey: string }[]): UntestedNotice[] {
+  const byUser = new Map<string, string[]>();
+  for (const ticket of tickets) {
+    if (!ticket.userId) continue;
+    const keys = byUser.get(ticket.userId) || [];
+    if (!keys.includes(ticket.issueKey)) keys.push(ticket.issueKey);
+    byUser.set(ticket.userId, keys);
+  }
+  return [...byUser].map(([userId, issueKeys]) => ({ userId, issueKeys, body: untestedBody(issueKeys) }));
+}

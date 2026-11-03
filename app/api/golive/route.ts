@@ -2,7 +2,7 @@ import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { requireMember } from "../../lib/member-access";
 import { getDb } from "../../../db";
 import { devices, goliveDeviceChecks, goliveReleases, goliveTicketDevices, goliveTickets, goliveWebSignoffs, userProfiles } from "../../../db/schema";
-import { normalizeName } from "../../lib/golive";
+import { matchAccount } from "../../lib/golive";
 import { waitUntil } from "cloudflare:workers";
 import { notifyRoles, notifyUsers, pushEnabled } from "../../lib/push";
 
@@ -20,12 +20,6 @@ async function announceDone(db: Db, releaseId: string, releaseName: string, done
   const finished = Array.from(new Set(done.map(item => item.assignee).filter(name => name && !open.some(row => row.assignee === name))));
   for (const name of finished) await notifyRoles(db, WATCHERS, { event: "qe-done", title: "QE đã test xong", body: name + " đã test xong đợt " + releaseName + "." });
   if (!open.length) await notifyRoles(db, EVERYONE, { event: "all-done", title: "Golive đã test xong", body: "Tất cả đã test xong đợt " + releaseName + ". Manager có thể bấm Hoàn thành." });
-}
-
-// A tester name maps to an account only when exactly one display name matches.
-function matchAccount(profiles: Profile[], name: string) {
-  const matches = profiles.filter(person => normalizeName(person.displayName) === normalizeName(name));
-  return matches.length === 1 ? matches[0].userId : null;
 }
 
 type DeviceRow = { id: string; name: string; category: string; holder: string; holderUserId: string | null };

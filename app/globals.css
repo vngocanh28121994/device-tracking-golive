@@ -781,6 +781,10 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 .stat-tip li { display: flex; gap: 8px; line-height: 1.45; }
 .stat-tip b { flex: 0 0 auto; color: var(--accent); font-weight: 650; }
 .stat-tip p { margin: 7px 0 0; font-size: 11px; }
+/* Sits under the ticket table and appears only once something is ticked. */
+.stat-notify { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border-top: 1px solid var(--line); background: #fbf9fd; font-size: 13px; color: var(--muted); }
+.stat-notify strong { color: var(--accent); font-variant-numeric: tabular-nums; }
+.stat-notify .primary-button { display: inline-flex; align-items: center; gap: 8px; }
 .stat-selection { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 12px 18px; font-size: 13px; color: var(--muted); background: #fbf9fd; }
 .stat-selection span { display: inline-flex; align-items: center; gap: 7px; }
 .stat-selection strong { color: var(--accent); font-size: 14px; font-variant-numeric: tabular-nums; }
@@ -812,6 +816,8 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
   .stat-release-progress small { text-align: right; }
   .stat-testers { padding-bottom: 14px; }
   .stat-details > .stat-section-toggle { padding: 12px 16px; }
+  .stat-notify { padding: 14px 16px; }
+  .stat-notify .primary-button { width: 100%; justify-content: center; }
   .stat-tester-table th { padding: 10px 14px; }
   .stat-tester-table td { padding: 10px 14px; }
   .stat-stack { max-width: none; }
@@ -1027,6 +1033,8 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 :root[data-theme="dark"] .stat-stack-counts strong { color: #b2e5d6; }
 :root[data-theme="dark"] /* Floats above everything, :root[data-theme="dark"] so a slice inside a scrolling table can still name its tickets. */
 .stat-tip { box-shadow: 0 14px 36px #150e1e26; }
+:root[data-theme="dark"] /* Sits under the ticket table and appears only once something is ticked. */
+.stat-notify { background: #2f223c; }
 :root[data-theme="dark"] .stat-selection { background: #2f223c; }
 :root[data-theme="dark"] .stat-row-check { color: #b2e5d6; }
 :root[data-theme="dark"] .stat-table tr.stat-row-done { background: #273c2f; }

@@ -79,3 +79,28 @@ assert.equal(late[0].userId, "u_anh");
 assert.deepEqual(tallyByTester([]), []);
 
 console.log("Statistic per-tester tally: counts, không-cần-test subtotal and ordering hold.");
+
+import { untestedBody, untestedNotices } from "../app/lib/statistic.ts";
+
+// The wording the Manager's reminder has to carry, verbatim.
+assert.equal(untestedBody(["DIP-2103"]), "Ticket DIP-2103 chưa được test sau golive. Vui lòng phản hồi trong thời gian sớm nhất.");
+assert.equal(untestedBody(["DIP-2103", "ON-884"]), "Ticket DIP-2103, ON-884 chưa được test sau golive. Vui lòng phản hồi trong thời gian sớm nhất.");
+
+const notices = untestedNotices([
+  { userId: "u_anh", issueKey: "DIP-2103" },
+  { userId: "u_bao", issueKey: "ON-905" },
+  { userId: "u_anh", issueKey: "DIP-2104" },
+  { userId: "u_anh", issueKey: "DIP-2103" },   // the same ticket twice must not repeat in the body
+  { userId: null, issueKey: "ON-884" },        // no account to notify
+]);
+
+// One notice per tester, not one per ticket.
+assert.equal(notices.length, 2);
+assert.deepEqual(notices.find(n => n.userId === "u_anh").issueKeys, ["DIP-2103", "DIP-2104"]);
+assert.equal(notices.find(n => n.userId === "u_anh").body,
+  "Ticket DIP-2103, DIP-2104 chưa được test sau golive. Vui lòng phản hồi trong thời gian sớm nhất.");
+assert.deepEqual(notices.find(n => n.userId === "u_bao").issueKeys, ["ON-905"]);
+assert.equal(notices.some(n => n.issueKeys.includes("ON-884")), false);
+assert.deepEqual(untestedNotices([]), []);
+
+console.log("Statistic reminders: one notice per tester, summarising every ticked ticket.");

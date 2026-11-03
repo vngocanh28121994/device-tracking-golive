@@ -1,25 +1,36 @@
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { waitUntil } from "cloudflare:workers";
 import { requireMember } from "../../lib/member-access";
 import { getDb } from "../../../db";
 import { goliveDeviceChecks, goliveReleases, goliveTickets, userProfiles } from "../../../db/schema";
 import { canViewStatistic } from "../../lib/roles";
+import { matchAccount } from "../../lib/golive";
+import { notifyUsers, pushEnabled } from "../../lib/push";
+import { untestedNotices } from "../../lib/statistic";
 
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { "Cache-Control": "private, no-store" } });
+
+// Same gate as the report itself: only someone who can see it can act on it.
+async function requireReporter() {
+  const access = await requireMember();
+  if ("response" in access) return access;
+  const db = getDb();
+  const [me] = await db.select({ role: userProfiles.role }).from(userProfiles).where(eq(userProfiles.userId, access.user.userId)).limit(1);
+  if (!canViewStatistic(me?.role, access.user.email)) return { response: json({ error: "Màn hình Statistic chỉ dành cho tài khoản có role Manager." }, 403) };
+  return { user: access.user, db };
+}
 
 // Read-only reporting: unlike /api/golive this never re-derives Done, so a Manager opening the
 // report cannot move a ticket. It shows exactly what the testers have already recorded.
 export async function GET(request: Request) {
-  const access = await requireMember();
+  const access = await requireReporter();
   if ("response" in access) return access.response;
-  const user = access.user;
+  const db = access.db;
   try {
-    const db = getDb();
-    const [me] = await db.select({ role: userProfiles.role }).from(userProfiles).where(eq(userProfiles.userId, user.userId)).limit(1);
-    if (!canViewStatistic(me?.role, user.email)) return json({ error: "Màn hình Statistic chỉ dành cho tài khoản có role Manager." }, 403);
     const releaseId = new URL(request.url).searchParams.get("release") || "";
     if (releaseId) {
       // One round trip each: the tickets, and how many devices each one has ticked so far.
-      const [rows, ticks] = await Promise.all([
+      const [rows, ticks, profiles] = await Promise.all([
         db.select().from(goliveTickets).where(eq(goliveTickets.releaseId, releaseId)).orderBy(goliveTickets.id),
         db.select({
           ticketId: goliveDeviceChecks.ticketId,
@@ -29,12 +40,14 @@ export async function GET(request: Request) {
         }).from(goliveDeviceChecks)
           .where(sql`${goliveDeviceChecks.ticketId} in (select ${goliveTickets.id} from ${goliveTickets} where ${goliveTickets.releaseId} = ${releaseId})`)
           .groupBy(goliveDeviceChecks.ticketId),
+        db.select({ userId: userProfiles.userId, displayName: userProfiles.displayName }).from(userProfiles),
       ]);
       const tickets = rows.map(ticket => {
         const tick = ticks.find(item => item.ticketId === ticket.id);
         return {
           id: ticket.id, issueKey: ticket.issueKey, summary: ticket.summary,
-          assignee: ticket.assignee, assigneeUserId: ticket.assigneeUserId,
+          assignee: ticket.assignee,
+          assigneeUserId: ticket.assigneeUserId ?? (ticket.assignee ? matchAccount(profiles, ticket.assignee) : null),
           doneAt: ticket.doneAt, skippedAt: ticket.skippedAt, skippedBy: ticket.skippedBy, skipKind: ticket.skipKind,
           testedDevices: tick?.devices ?? 0, lastCheckedAt: tick?.lastCheckedAt ?? null,
         };
@@ -56,5 +69,41 @@ export async function GET(request: Request) {
     return json({ releases });
   } catch {
     return json({ error: "Không thể tải số liệu golive." }, 500);
+  }
+}
+
+// Reminds the tester of each ticket the Manager ticked in the report. Tickets of one tester are
+// summarised into a single notification, and a ticket finished since it was ticked is left alone.
+export async function POST(request: Request) {
+  const access = await requireReporter();
+  if ("response" in access) return access.response;
+  const db = access.db;
+  let body: Record<string, unknown>;
+  try { body = await request.json(); } catch { return json({ error: "Dữ liệu không hợp lệ." }, 400); }
+  if (body.action !== "notify-untested") return json({ error: "Thao tác không được hỗ trợ." }, 400);
+  const releaseId = typeof body.releaseId === "string" ? body.releaseId.trim().slice(0, 60) : "";
+  const ids = Array.from(new Set((Array.isArray(body.ticketIds) ? body.ticketIds : []).map(Number).filter(Number.isInteger))).slice(0, 200);
+  if (!releaseId || !ids.length) return json({ error: "Chưa chọn ticket nào để nhắc." }, 400);
+  try {
+    const [rows, profiles] = await Promise.all([
+      db.select({ issueKey: goliveTickets.issueKey, assignee: goliveTickets.assignee, assigneeUserId: goliveTickets.assigneeUserId })
+        .from(goliveTickets)
+        .where(and(eq(goliveTickets.releaseId, releaseId), inArray(goliveTickets.id, ids), isNull(goliveTickets.doneAt)))
+        .orderBy(goliveTickets.id),
+      db.select({ userId: userProfiles.userId, displayName: userProfiles.displayName }).from(userProfiles),
+    ]);
+    const owned = rows.map(row => ({ issueKey: row.issueKey, userId: row.assigneeUserId ?? (row.assignee ? matchAccount(profiles, row.assignee) : null) }));
+    const notices = untestedNotices(owned);
+    const unmatched = owned.filter(row => !row.userId).map(row => row.issueKey);
+    // A ticket that turned Done between the tick and the send is dropped rather than reminded about.
+    const alreadyDone = ids.length - rows.length;
+    if (!notices.length) return json({ error: "Không có ticket nào để nhắc: người test chưa khớp tài khoản hoặc ticket đã Done.", unmatched, alreadyDone }, 409);
+    if (!await pushEnabled(db, "remind-untested")) return json({ error: "Nhắc nhở qua thông báo đang bị tắt trong cài đặt." }, 409);
+    for (const notice of notices) {
+      waitUntil(notifyUsers(db, [notice.userId], { event: "remind-untested", title: "Ticket chưa được test", body: notice.body, link: "/?tab=golive" }));
+    }
+    return json({ notified: notices.length, tickets: notices.reduce((total, notice) => total + notice.issueKeys.length, 0), unmatched, alreadyDone });
+  } catch {
+    return json({ error: "Không thể gửi thông báo." }, 500);
   }
 }

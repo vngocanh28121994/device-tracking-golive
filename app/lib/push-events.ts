@@ -6,6 +6,7 @@ export const pushEvents = [
   { key: "qe-done", label: "Một QE test xong toàn bộ ticket", to: "Manager, PM" },
   { key: "all-done", label: "Mọi ticket của đợt đã Done", to: "Mọi người" },
   { key: "release-completed", label: "Đợt golive được hoàn thành", to: "Mọi người" },
+  { key: "remind-untested", label: "Manager nhắc ticket chưa test sau golive", to: "QE của ticket" },
 ] as const;
 export type PushEvent = typeof pushEvents[number]["key"];
 export const isPushEvent = (value: unknown): value is PushEvent => pushEvents.some(item => item.key === value);
