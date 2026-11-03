@@ -446,6 +446,17 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 .manual-testers li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; }
 .account-roles { margin-top: 24px; }
 .account-roles h2 { margin: 0 0 8px; font-size: 18px; }
+.account-role-toolbar { display: grid; gap: 10px; margin-top: 14px; }
+.account-role-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.account-role-chips button { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: #624980; font-size: 12px; font-weight: 600; }
+.account-role-chips button span { min-width: 20px; padding: 1px 6px; border-radius: 999px; background: #eee9f2; color: var(--muted); font-size: 11px; text-align: center; }
+.account-role-chips button:hover { border-color: #cdbfe0; }
+.account-role-chips button.active { background: var(--lavender); border-color: var(--accent); color: var(--accent); }
+.account-role-chips button.active span { background: var(--accent); color: #fff; }
+.search-clear { display: grid; place-items: center; width: 28px; height: 28px; flex: none; border: 0; border-radius: 7px; background: none; color: var(--muted); }
+.search-clear:hover { background: #eee9f2; color: var(--ink); }
+.account-role-list { max-height: min(60vh, 560px); overflow-y: auto; overscroll-behavior: contain; }
+.account-role-empty { margin: 14px 0 0; font-size: 13px; color: var(--muted); }
 .account-role-list li { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 14px 0; border-top: 1px solid var(--line); }
 .account-role-person { min-width: 0; display: grid; gap: 6px; }
 .account-role-person small { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
@@ -460,6 +471,8 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
   .golive-heading-actions button { min-height: 42px; }
   .account-role-list li { align-items: flex-start; gap: 10px; }
   .account-role-select { width: 140px; }
+  .account-role-list { max-height: none; overflow: visible; }
+  .account-role-chips button { min-height: 40px; }
 }
 .golive-checklist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .golive-checklist label { position: relative; display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); font-size: 13px; cursor: pointer; text-align: left; }
