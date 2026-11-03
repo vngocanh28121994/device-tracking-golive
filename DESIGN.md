@@ -20,7 +20,14 @@ Receive/lend confirmations use a short catch-the-device interaction. The basket 
 
 ## Compact workspace refinement
 
-- Open directly to Kho thiết bị. Navigation contains inventory and profile only; do not reintroduce an overview or repeated usage/unknown-holder statistics.
+- Open directly to Kho thiết bị. Navigation contains inventory, Tracking Golive and profile; do not reintroduce an overview or repeated usage/unknown-holder statistics.
 - Holder initials and deterministic pastel colors come from `HolderIdentity`, shared by the inventory and device popup. The name remains readable next to the avatar.
 - Device dialogs place the icon beside the device name and use the same holder strip and left-back/right-primary footer layout.
 - The game gets a wider stage with fixed surrounding controls. Basket tilt acknowledges movement; a short confetti burst marks a catch, and a restrained wobble marks a miss. Reduced motion skips the decorative effects.
+
+## Mobile workspace
+
+- At widths up to 900px, use the navigation drawer and stack golive rows as cards. Show ticket key, status, title, tester and full-width device checklist without horizontal table scrolling. Manual releases show tester, status and checklist.
+- Keep search and a sort picker visible. Column filters and release actions expand from labeled buttons; retain access to every sort/filter option.
+- Device rows and interactive controls need at least 44px touch targets. Form inputs and select triggers use 16px text; dialogs fit inside the viewport and scroll vertically.
+- Role assignment stacks each account above its role selector. Wrap long names, emails and fixVersions; preserve desktop tables above the mobile breakpoint.

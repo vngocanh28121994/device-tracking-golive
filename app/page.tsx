@@ -47,6 +47,27 @@ export default function Home(){
  const [showHandoverGame,setShowHandoverGame]=useState(false),[signedOut,setSignedOut]=useState(false);
  const [teamAccounts,setTeamAccounts]=useState<TeamAccount[]>([]),[teamAccountsLoading,setTeamAccountsLoading]=useState(false),[teamAccountsError,setTeamAccountsError]=useState("");
  useEffect(()=>{
+  if(!mobileNav)return;
+  const sidebar=document.querySelector<HTMLElement>(".sidebar");
+  const previous=document.activeElement as HTMLElement|null;
+  const overflow=document.body.style.overflow;
+  document.body.style.overflow="hidden";
+  const controls=()=>Array.from(sidebar?.querySelectorAll<HTMLButtonElement>("button")||[]).filter(button=>!button.disabled);
+  controls()[0]?.focus();
+  const close=()=>setMobileNav(false);
+  const onKey=(event:KeyboardEvent)=>{
+   if(event.key==="Escape"){event.preventDefault();close()}
+   if(event.key!=="Tab")return;
+   const buttons=controls(),first=buttons[0],last=buttons[buttons.length-1];
+   if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus()}
+   else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus()}
+  };
+  const onClick=(event:MouseEvent)=>{if((event.target as Element).closest("button"))close()};
+  sidebar?.addEventListener("click",onClick);
+  document.addEventListener("keydown",onKey);
+  return()=>{document.body.style.overflow=overflow;sidebar?.removeEventListener("click",onClick);document.removeEventListener("keydown",onKey);previous?.focus()};
+ },[mobileNav]);
+ useEffect(()=>{
   if(!selectedDevice&&!modal)return;
   const previous=document.activeElement as HTMLElement|null;
   const dialog=document.querySelector<HTMLElement>("[role=dialog]");
