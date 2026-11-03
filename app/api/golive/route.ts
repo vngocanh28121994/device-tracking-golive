@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { requireMember } from "../../lib/member-access";
 import { getDb } from "../../../db";
-import { devices, goliveDeviceChecks, goliveReleases, goliveTicketDevices, goliveTickets, userProfiles } from "../../../db/schema";
+import { devices, goliveDeviceChecks, goliveReleases, goliveTicketDevices, goliveTickets, goliveWebSignoffs, userProfiles } from "../../../db/schema";
 import { normalizeName } from "../../lib/golive";
 
 type Db = ReturnType<typeof getDb>;
@@ -71,8 +71,20 @@ async function loadRelease(db: Db, releaseId: string, now = new Date().toISOStri
 const ticketWithRelease = (db: Db, ticketId: number) =>
   db.select({ ticket: goliveTickets, completedAt: goliveReleases.completedAt }).from(goliveTickets).innerJoin(goliveReleases, eq(goliveReleases.id, goliveTickets.releaseId)).where(eq(goliveTickets.id, ticketId));
 
+// Web phase: every account with role QE confirms the web build before the app build starts.
+// Progress counts today's QE accounts, so a sign-off from someone no longer QE is not counted.
+async function webPhase(db: Db, releaseId: string) {
+  if (!releaseId) return { qe: [], signed: {} };
+  const [qe, rows] = await Promise.all([
+    db.select({ userId: userProfiles.userId, displayName: userProfiles.displayName }).from(userProfiles).where(eq(userProfiles.role, "QE")).orderBy(userProfiles.displayName),
+    db.select().from(goliveWebSignoffs).where(eq(goliveWebSignoffs.releaseId, releaseId)),
+  ]);
+  return { qe, signed: Object.fromEntries(rows.map(row => [row.userId, row.signedAt])) };
+}
+
 async function deleteRelease(db: Db, releaseId: string) {
   await db.batch([
+    db.delete(goliveWebSignoffs).where(eq(goliveWebSignoffs.releaseId, releaseId)),
     db.delete(goliveDeviceChecks).where(inRelease(goliveDeviceChecks.ticketId, releaseId)),
     db.delete(goliveTicketDevices).where(inRelease(goliveTicketDevices.ticketId, releaseId)),
     db.delete(goliveTickets).where(eq(goliveTickets.releaseId, releaseId)),
@@ -97,8 +109,8 @@ export async function GET(request: Request) {
     // A release deleted by someone else falls back to the default one.
     const found = releases.some(item => item.id === requested);
     const releaseId = found ? requested : releases.find(item => !item.completedAt)?.id || "";
-    const { tickets, held, checks } = found && preloaded ? preloaded : await loadRelease(db, releaseId);
-    return Response.json({ releases, releaseId, tickets, devicesByUser: Object.fromEntries(held), checks }, noStore);
+    const [{ tickets, held, checks }, web] = await Promise.all([found && preloaded ? preloaded : loadRelease(db, releaseId), webPhase(db, releaseId)]);
+    return Response.json({ releases, releaseId, tickets, devicesByUser: Object.fromEntries(held), checks, web }, noStore);
   } catch {
     return error("Không thể tải danh sách golive.", 500);
   }
@@ -161,7 +173,7 @@ export async function POST(request: Request) {
       const tester = ticket.assigneeUserId ?? (ticket.assignee ? matchAccount(profiles, ticket.assignee) : null);
       if (tester !== user.userId) return error("Chỉ người test của ticket này mới được tích checklist.", 403);
       if (completedAt) return error("Đợt golive đã hoàn thành, không thể sửa checklist.", 409);
-      if (ticket.skippedAt && ticket.skipKind !== "tested") return error("Ticket đã được đánh dấu không cần test. Hãy thu hồi trước khi tích checklist.", 409);
+      if (ticket.skippedAt && ticket.skipKind !== "tested") return error("Ticket đã được đánh dấu không cần test hoặc không test được. Hãy thu hồi trước khi tích checklist.", 409);
       if (body.checked === false) {
         await db.batch([
           db.delete(goliveDeviceChecks).where(and(eq(goliveDeviceChecks.ticketId, ticketId), eq(goliveDeviceChecks.deviceId, deviceId))),
@@ -177,7 +189,10 @@ export async function POST(request: Request) {
       return Response.json({ doneAt: tickets[0]?.doneAt ?? null });
     }
     if (body.action === "skip-test") {
-      const ticketId = Number(body.ticketId), skipped = body.skipped !== false, kind = body.kind === "tested" ? "tested" : "not-needed";
+      const ticketId = Number(body.ticketId), skipped = body.skipped !== false;
+      const kind = body.kind === "tested" || body.kind === "cannot-test" ? body.kind : "not-needed";
+      const reason = kind === "cannot-test" ? clean(body.reason, 500) : "", notified = kind === "cannot-test" && body.notified === true;
+      if (skipped && kind === "cannot-test" && !reason) return error("Hãy nhập lý do không test được.");
       const [[found], profiles] = await Promise.all([
         ticketWithRelease(db, ticketId),
         db.select({ userId: userProfiles.userId, displayName: userProfiles.displayName, role: userProfiles.role }).from(userProfiles),
@@ -191,10 +206,33 @@ export async function POST(request: Request) {
       if (completedAt) return error("Đợt golive đã hoàn thành, không thể sửa.", 409);
       const by = me?.displayName || user.displayName || user.email;
       // Undoing clears Done too; the next load marks it Done again if every device is already ticked.
-      await db.update(goliveTickets).set(skipped ? { skippedAt: now, skippedBy: by, skipKind: kind, doneAt: now } : { skippedAt: null, skippedBy: null, skipKind: "not-needed", doneAt: null }).where(eq(goliveTickets.id, ticketId));
+      await db.update(goliveTickets).set(skipped ? { skippedAt: now, skippedBy: by, skipKind: kind, skipReason: reason, skipNotified: notified, doneAt: now } : { skippedAt: null, skippedBy: null, skipKind: "not-needed", skipReason: "", skipNotified: false, doneAt: null }).where(eq(goliveTickets.id, ticketId));
       const { tickets } = await loadRelease(db, ticket.releaseId, now, ticketId);
       const updated = tickets[0];
-      return Response.json({ doneAt: updated?.doneAt ?? null, skippedAt: updated?.skippedAt ?? null, skippedBy: updated?.skippedBy ?? null, skipKind: updated?.skipKind ?? "not-needed" });
+      return Response.json({ doneAt: updated?.doneAt ?? null, skippedAt: updated?.skippedAt ?? null, skippedBy: updated?.skippedBy ?? null, skipKind: updated?.skipKind ?? "not-needed", skipReason: updated?.skipReason ?? "", skipNotified: updated?.skipNotified ?? false });
+    }
+    if (body.action === "web-signoff") {
+      const releaseId = clean(body.releaseId, 60), done = body.done !== false;
+      const [[release], [me]] = await Promise.all([
+        db.select({ completedAt: goliveReleases.completedAt }).from(goliveReleases).where(eq(goliveReleases.id, releaseId)),
+        db.select({ role: userProfiles.role }).from(userProfiles).where(eq(userProfiles.userId, user.userId)),
+      ]);
+      if (!release) return error("Không tìm thấy đợt golive.", 404);
+      if (release.completedAt) return error("Đợt golive đã hoàn thành, không thể sửa.", 409);
+      if (me?.role !== "QE") return error("Chỉ tài khoản QE mới xác nhận hoàn thành test web.", 403);
+      if (done) await db.insert(goliveWebSignoffs).values({ releaseId, userId: user.userId, signedAt: now }).onConflictDoNothing();
+      else await db.delete(goliveWebSignoffs).where(and(eq(goliveWebSignoffs.releaseId, releaseId), eq(goliveWebSignoffs.userId, user.userId)));
+      return Response.json({ web: await webPhase(db, releaseId) });
+    }
+    if (body.action === "remind-web") {
+      // Push notifications come later; for now this only checks who may remind and who is left.
+      const releaseId = clean(body.releaseId, 60);
+      const [[me], web] = await Promise.all([
+        db.select({ role: userProfiles.role }).from(userProfiles).where(eq(userProfiles.userId, user.userId)),
+        webPhase(db, releaseId),
+      ]);
+      if (me?.role !== "Manager") return error("Chỉ Manager mới được nhắc nhở.", 403);
+      return Response.json({ pending: web.qe.filter(person => !(person.userId in web.signed)).length });
     }
     if (body.action === "complete-release") {
       const releaseId = clean(body.releaseId, 60);
