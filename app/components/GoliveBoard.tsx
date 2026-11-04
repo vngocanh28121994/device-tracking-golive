@@ -48,6 +48,9 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
   const [cannotTest, setCannotTest] = useState<{ ticket: Ticket; editing: boolean; phase?: "web" } | null>(null);
   const [failing, setFailing] = useState<{ ticket: Ticket; editing: boolean; phase?: "web" } | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // Tickets ticked for a bulk status update, and the reason dialog a bulk "cannot test"/"failed" opens.
+  const [picked, setPicked] = useState<number[]>([]);
+  const [bulkReason, setBulkReason] = useState<"cannot-test" | "failed" | null>(null);
 
   const load = useCallback(async (id = "") => {
     try {
@@ -84,7 +87,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
     return () => { clearInterval(timer); document.removeEventListener("visibilitychange", refresh); };
   }, [load]);
 
-  function resetFilters() { setQuery(""); setStatusFilter("__all__"); setKeyFilter(""); setSummaryFilter(""); setTesterFilter("__all__"); }
+  function resetFilters() { setQuery(""); setStatusFilter("__all__"); setKeyFilter(""); setSummaryFilter(""); setTesterFilter("__all__"); setPicked([]); }
 
   async function post(body: Record<string, unknown>) {
     const r = await fetch("/api/golive", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -184,6 +187,26 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
 
   // Phase web: the tester picks one of the four outcomes directly; null takes it back.
   const WEB_TOAST: Record<WebStatus, string> = { tested: "đã test xong web", "not-needed": "không cần test web", "cannot-test": "không test được web", failed: "test web failed" };
+  // One of the four outcomes for every ticked ticket, in the phase the release is in.
+  const BULK_LABEL: Record<WebStatus, string> = { tested: "Đã test xong", "not-needed": "Không cần test", "cannot-test": "Không test được", failed: "Test failed" };
+  async function bulkUpdate(status: WebStatus, reason = "", notified = false) {
+    const ids = picked.filter(id => tickets.some(item => item.id === id && canSkip(item)));
+    if (!ids.length) return false;
+    const phaseName = appPhase ? "phase app" : "phase web";
+    if ((status === "tested" || status === "not-needed") && !await confirm({ title: "Cập nhật " + ids.length + " ticket?", message: <><strong>{ids.length}</strong> ticket đã chọn sẽ được đánh dấu <strong>{BULK_LABEL[status]}</strong> ở {phaseName}{appPhase ? " và chuyển sang Done" : ""}. Có thể thu hồi từng ticket sau.</>, confirmLabel: BULK_LABEL[status] })) return false;
+    setBusy(true);
+    try {
+      const r = await fetch("/api/golive", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "bulk-status", releaseId, phase: appPhase ? "app" : "web", status, reason, notified, ticketIds: ids }) });
+      const result = await r.json() as { error?: string; updated?: number[]; values?: Partial<Ticket>; skipped?: number };
+      if (!r.ok) throw new Error(result.error || "Không thể cập nhật ticket.");
+      const updated = result.updated || [];
+      setTickets(current => current.map(item => updated.includes(item.id) ? { ...item, ...result.values } : item));
+      setPicked([]);
+      onToast("Đã đánh dấu " + updated.length + " ticket " + BULK_LABEL[status] + " ở " + phaseName + (result.skipped ? " (bỏ qua " + result.skipped + " ticket không có quyền)" : ""));
+      return true;
+    } catch (e) { onError(e instanceof Error ? e.message : "Không thể cập nhật ticket."); return false; } finally { setBusy(false); }
+  }
+
   async function setWebStatus(ticket: Ticket, status: WebStatus | null, reason = "", notified = false) {
     if (status === null && !await confirm({ title: "Thu hồi trạng thái phase web?", message: <>Ticket <strong>{ticket.issueKey}</strong> sẽ quay lại chưa test web.</>, confirmLabel: "Thu hồi" })) return false;
     if ((status === "tested" || status === "not-needed") && !await confirm(status === "tested"
@@ -363,6 +386,13 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
     return <th aria-sort={active ? (sort.dir === 1 ? "ascending" : "descending") : "none"}><button type="button" className={"golive-sort " + (active ? "active" : "")} onClick={() => setSort(!active ? { key, dir: 1 } : sort.dir === 1 ? { key, dir: -1 } : null)}>{label}<Icon size={13} /></button></th>;
   };
   const done = tickets.filter(fullyTested).length;
+  // Bulk updates need tickets, so a manual golive and a completed one have no checkbox column.
+  const bulkOn = !manual && !!current && !current.completedAt;
+  const pickable = bulkOn ? visible.filter(canSkip) : [];
+  const pickedVisible = pickable.filter(item => picked.includes(item.id));
+  const pickedCount = picked.filter(id => tickets.some(item => item.id === id && canSkip(item))).length;
+  const pickedList = tickets.filter(item => picked.includes(item.id) && canSkip(item)).map(item => item.issueKey);
+  const pickedKeys = pickedList.slice(0, 5).join(", ") + (pickedList.length > 5 ? " và " + (pickedList.length - 5) + " ticket khác" : "");
   const me = people.find(person => person.userId === currentUserId);
   const webSigned = web.qe.filter(person => person.userId in web.signed), webPending = web.qe.filter(person => !(person.userId in web.signed));
   const webDone = web.qe.length > 0 && webPending.length === 0;
@@ -433,13 +463,28 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
           <label>NGƯỜI TEST<StyledSelect ariaLabel="Lọc theo người test" value={testerFilter} onChange={setTesterFilter} options={testerOptions} placeholder="Tất cả người test" /></label>
           {filtered && <button type="button" className="outline-button golive-clear" onClick={() => { resetFilters(); setMineOnly(false); }}><X size={15} /> Xoá lọc</button>}
         </div>
-        <section className="panel table-panel"><div className="table-scroll"><table className={"golive-table" + (manual ? " golive-manual-table" : "")}><thead><tr>{!manual && <>{sortHeader("issueKey", "MÃ")}{sortHeader("summary", "TÊN TICKET")}</>}{sortHeader("assignee", "NGƯỜI TEST")}<th>TRẠNG THÁI</th><th><span className="golive-phase-th"><Globe size={13} aria-hidden="true" /> PHASE WEB</span></th><th><span className="golive-phase-th"><Smartphone size={13} aria-hidden="true" /> PHASE APP</span></th></tr></thead><tbody>{visible.map(ticket => <tr key={ticket.id}>
+        {bulkOn && pickedCount > 0 && <div className="golive-bulk" role="region" aria-label="Cập nhật hàng loạt">
+          <span className="golive-bulk-count">Đã chọn <strong>{pickedCount}</strong> ticket · cập nhật {appPhase ? <><Smartphone size={14} aria-hidden="true" /> Phase app</> : <><Globe size={14} aria-hidden="true" /> Phase web</>}:</span>
+          <div className="golive-bulk-actions">
+            <button type="button" className="outline-button" disabled={busy} onClick={() => void bulkUpdate("tested")}><CheckCircle2 size={15} /> Đã test xong</button>
+            <button type="button" className="outline-button" disabled={busy} onClick={() => void bulkUpdate("not-needed")}><Ban size={15} /> Không cần test</button>
+            <button type="button" className="outline-button" disabled={busy} onClick={() => setBulkReason("cannot-test")}><CircleSlash size={15} /> Không test được</button>
+            <button type="button" className="outline-button golive-fail-button" disabled={busy} onClick={() => setBulkReason("failed")}><XCircle size={15} /> Test failed</button>
+            <button type="button" className="text-button" disabled={busy} onClick={() => setPicked([])}><X size={15} /> Bỏ chọn</button>
+          </div>
+        </div>}
+        <section className="panel table-panel"><div className="table-scroll"><table className={"golive-table" + (manual ? " golive-manual-table" : "")}><thead><tr>{bulkOn && <th className="golive-pick"><input type="checkbox" aria-label="Chọn tất cả ticket đang hiển thị mà bạn được đánh dấu"
+          disabled={pickable.length === 0} checked={pickable.length > 0 && pickedVisible.length === pickable.length}
+          ref={element => { if (element) element.indeterminate = pickedVisible.length > 0 && pickedVisible.length < pickable.length; }}
+          onChange={event => setPicked(event.target.checked ? Array.from(new Set([...picked, ...pickable.map(item => item.id)])) : picked.filter(id => !pickable.some(item => item.id === id)))} /></th>}{!manual && <>{sortHeader("issueKey", "MÃ")}{sortHeader("summary", "TÊN TICKET")}</>}{sortHeader("assignee", "NGƯỜI TEST")}<th>TRẠNG THÁI</th><th><span className="golive-phase-th"><Globe size={13} aria-hidden="true" /> PHASE WEB</span></th><th><span className="golive-phase-th"><Smartphone size={13} aria-hidden="true" /> PHASE APP</span></th></tr></thead><tbody>{visible.map(ticket => <tr key={ticket.id} className={picked.includes(ticket.id) ? "golive-row-picked" : ""}>
+          {bulkOn && <td className="golive-pick">{canSkip(ticket) && <input type="checkbox" aria-label={"Chọn " + ticket.issueKey} checked={picked.includes(ticket.id)}
+            onChange={event => setPicked(event.target.checked ? [...picked, ticket.id] : picked.filter(id => id !== ticket.id))} />}</td>}
           {!manual && <><td className="golive-key">{ticket.issueKey}</td>
           <td className="golive-summary">{ticket.summary || <span className="muted">(không có tên)</span>}</td></>}
           <td className="golive-assignee">{ticket.assignee ? <HolderIdentity name={ticket.assignee} avatar={people.find(person => person.userId === ticket.assigneeUserId)?.avatar || ""} role={people.find(person => person.userId === ticket.assigneeUserId)?.role} /> : <span className="muted">Chưa có người test</span>}</td>
           <td className="golive-ticket-status"><span className={statusClass(statusOf(ticket))}>{statusOf(ticket)}</span></td>
           <td className={"golive-web-cell" + (appPhase ? " golive-phase-locked" : "")}>{webCell(ticket)}</td>
-          <td className={"golive-devices" + (appPhase ? "" : " golive-phase-locked")}>{!appPhase ? <span className="golive-phase-lock"><Lock size={13} aria-hidden="true" /> Chưa mở · mở khi tất cả QE xác nhận xong test web{checks.some(item => item.ticketId === ticket.id) && <small>Đã tích {checks.filter(item => item.ticketId === ticket.id).length} thiết bị trước đó</small>}</span>
+          <td className={"golive-devices" + (appPhase ? "" : " golive-phase-locked")}>{!appPhase ? <span className="golive-phase-lock"><Lock size={13} aria-hidden="true" /> Chưa mở · chờ tất cả QE xác nhận test web{checks.some(item => item.ticketId === ticket.id) && <small>Đã tích {checks.filter(item => item.ticketId === ticket.id).length} thiết bị trước đó</small>}</span>
             : <div className="golive-phase-body">{ticket.skippedAt && ticket.skipKind !== "tested" ? skipBadge(ticket) : <>{ticket.skippedAt && skipBadge(ticket)}{!ticket.assignee ? <span className="muted">Chưa có người test</span> : !ticket.assigneeUserId ? <span className="muted">“{ticket.assignee}” chưa khớp tài khoản nào</span> : (() => {
             const list = ticketDevices(ticket), mine = ticket.assigneeUserId === currentUserId && !current?.completedAt && !(ticket.skippedAt && ticket.skipKind !== "tested");
             if (list.length === 0) return <span className="muted">Người test chưa cầm thiết bị nào</span>;
@@ -467,6 +512,8 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
       </>}
       </>}
     {confirmDialog}
+    {bulkReason === "failed" && <TestFailedDialog issueKey={pickedKeys} busy={busy} onCancel={() => setBulkReason(null)} onSubmit={reason => void bulkUpdate("failed", reason).then(ok => { if (ok) setBulkReason(null); })} />}
+    {bulkReason === "cannot-test" && <CannotTestDialog issueKey={pickedKeys} busy={busy} onCancel={() => setBulkReason(null)} onSubmit={(reason, notified) => void bulkUpdate("cannot-test", reason, notified).then(ok => { if (ok) setBulkReason(null); })} />}
     {failing && <TestFailedDialog key={failing.ticket.id} issueKey={failing.ticket.issueKey} editing={failing.editing} initialReason={failing.editing ? (failing.phase === "web" ? failing.ticket.webReason : failing.ticket.failedReason) || "" : ""} busy={busy} onCancel={() => setFailing(null)} onSubmit={reason => void markFailed(reason)} />}
     {cannotTest && <CannotTestDialog key={cannotTest.ticket.id} issueKey={cannotTest.ticket.issueKey} editing={cannotTest.editing} initialReason={cannotTest.editing ? (cannotTest.phase === "web" ? cannotTest.ticket.webReason : cannotTest.ticket.skipReason) || undefined : undefined} initialNotified={cannotTest.editing && !!(cannotTest.phase === "web" ? cannotTest.ticket.webNotified : cannotTest.ticket.skipNotified)} busy={busy} onCancel={() => setCannotTest(null)} onSubmit={(reason, notified) => void markCannotTest(reason, notified)} />}
     {unfinished && <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setUnfinished(null); }} onKeyDown={e => { if (e.key === "Escape") setUnfinished(null); }}><div className="modal golive-warning" role="alertdialog" aria-modal="true" aria-labelledby="golive-warning-title">

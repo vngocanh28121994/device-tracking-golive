@@ -254,6 +254,50 @@ export async function POST(request: Request) {
       const updated = tickets[0];
       return Response.json({ doneAt: updated?.doneAt ?? null, failedAt: updated?.failedAt ?? null, failedBy: updated?.failedBy ?? null, failedReason: updated?.failedReason ?? "", skippedAt: updated?.skippedAt ?? null, skippedBy: updated?.skippedBy ?? null, skipKind: updated?.skipKind ?? "not-needed", skipReason: updated?.skipReason ?? "", skipNotified: updated?.skipNotified ?? false });
     }
+    // Bulk update: one of the four outcomes for many tickets of one release, in the phase it is in.
+    // Same rules as the single-ticket actions; tickets the user may not mark are left alone and counted.
+    if (body.action === "bulk-status") {
+      const releaseId = clean(body.releaseId, 60), phase = body.phase === "web" ? "web" : "app";
+      const status = isWebStatus(body.status) ? body.status : null;
+      if (!status) return error("Trạng thái không hợp lệ.");
+      const ids = Array.from(new Set((Array.isArray(body.ticketIds) ? body.ticketIds : []).map(Number).filter(Number.isInteger))).slice(0, 1000);
+      if (!ids.length) return error("Chưa chọn ticket nào.");
+      const reason = status === "cannot-test" || status === "failed" ? clean(body.reason, 500) : "", notified = status === "cannot-test" && body.notified === true;
+      if (status === "cannot-test" && !reason) return error("Hãy nhập lý do không test được.");
+      if (status === "failed" && !reason) return error("Hãy nhập lý do test failed.");
+      const [[release], profiles, rows, web] = await Promise.all([
+        db.select({ completedAt: goliveReleases.completedAt, name: goliveReleases.name, source: goliveReleases.source }).from(goliveReleases).where(eq(goliveReleases.id, releaseId)),
+        db.select({ userId: userProfiles.userId, displayName: userProfiles.displayName, role: userProfiles.role }).from(userProfiles),
+        db.select().from(goliveTickets).where(eq(goliveTickets.releaseId, releaseId)),
+        webPhase(db, releaseId),
+      ]);
+      if (!release) return error("Không tìm thấy đợt golive.", 404);
+      if (release.completedAt) return error("Đợt golive đã hoàn thành, không thể sửa.", 409);
+      if (release.source === "manual") return error("Đợt golive tạo tay không có ticket để cập nhật hàng loạt.", 409);
+      const inApp = appPhaseOf(web);
+      if (phase === "app" && !inApp) return error(WEB_PHASE_ONLY, 409);
+      if (phase === "web" && inApp) return error(APP_PHASE_ONLY, 409);
+      const me = profiles.find(item => item.userId === user.userId);
+      const picked = rows.filter(row => ids.includes(row.id));
+      const allowed = picked.filter(row => {
+        const tester = row.assigneeUserId ?? (row.assignee ? matchAccount(profiles, row.assignee) : null);
+        return !tester || tester === user.userId || me?.role === "Manager";
+      });
+      if (!allowed.length) return error("Bạn không có quyền đánh dấu các ticket đã chọn. Chỉ người test của ticket hoặc Manager mới được đánh dấu.", 403);
+      const by = me?.displayName || user.displayName || user.email;
+      const values = phase === "web"
+        ? { webStatus: status, webAt: now, webBy: by, webReason: reason, webNotified: notified }
+        : status === "failed"
+          ? { failedAt: now, failedBy: by, failedReason: reason, doneAt: null, skippedAt: null, skippedBy: null, skipKind: "not-needed", skipReason: "", skipNotified: false }
+          : { skippedAt: now, skippedBy: by, skipKind: status, skipReason: reason, skipNotified: notified, doneAt: now, failedAt: null, failedBy: null, failedReason: "" };
+      const allowedIds = allowed.map(row => row.id);
+      // D1 caps bound parameters per statement, so updates go in chunks of one batch.
+      const writes = [];
+      for (let i = 0; i < allowedIds.length; i += 90) writes.push(db.update(goliveTickets).set(values).where(inArray(goliveTickets.id, allowedIds.slice(i, i + 90))));
+      await db.batch(writes as [typeof writes[number], ...typeof writes]);
+      if (phase === "app" && status !== "failed") waitUntil(announceDone(db, releaseId, release.name, allowed));
+      return Response.json({ updated: allowedIds, values, skipped: picked.length - allowed.length, missing: ids.length - picked.length });
+    }
     if (body.action === "web-status") {
       const ticketId = Number(body.ticketId), status = body.status === null ? null : isWebStatus(body.status) ? body.status : undefined;
       if (status === undefined) return error("Trạng thái phase web không hợp lệ.");
