@@ -155,3 +155,14 @@ console.log("Statistic test-failed: outstanding rather than Done, and its own ma
   assert.deepEqual(tally.map(row => [row.name, row.done, row.failed, row.open, row.total]), [["An", 1, 1, 1, 3], ["Bình", 2, 0, 0, 2]]);
   console.log("Statistic web phase: per-tester web outcomes and QE sign-offs hold.");
 }
+
+// Only the four known web outcomes count; a stray value (bad data) is still untested.
+{
+  const { webSettled, isWebStatus } = await import("../app/lib/golive.ts");
+  assert.equal(webSettled("tested"), true);
+  assert.equal(webSettled("failed"), false);
+  assert.equal(webSettled("web_status"), false);
+  assert.equal(webSettled(null), false);
+  assert.equal(isWebStatus("web_status"), false);
+  console.log("Golive web outcomes: unknown values read as untested.");
+}

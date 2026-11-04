@@ -6,7 +6,7 @@ import { HolderIdentity } from "./HolderIdentity";
 import { LoadingState } from "./LoadingState";
 import { useConfirm } from "./ConfirmDialog";
 import { readUrlParam, writeUrlParams } from "../lib/url-state";
-import { ImportedTicket, inAppPhase, normalizeName, releaseNameFromCsv, ticketsFromCsv, WebStatus } from "../lib/golive";
+import { ImportedTicket, inAppPhase, isWebStatus, normalizeName, releaseNameFromCsv, ticketsFromCsv, webSettled, WebStatus } from "../lib/golive";
 import { ManualGoliveDialog } from "./ManualGoliveDialog";
 import { CannotTestDialog } from "./CannotTestDialog";
 import { TestFailedDialog } from "./TestFailedDialog";
@@ -326,7 +326,8 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
       const at = ticket.assigneeUserId ? web.signed[ticket.assigneeUserId] : undefined;
       return at ? <span className="golive-web-outcome"><CheckCircle2 size={15} aria-hidden="true" /> Đã xác nhận test web</span> : <span className="muted">Chưa xác nhận test web</span>;
     }
-    const editable = !appPhase && canSkip(ticket), status = ticket.webStatus;
+    // Anything but the four known outcomes (bad data) reads as not tested yet.
+    const editable = !appPhase && canSkip(ticket), status = isWebStatus(ticket.webStatus) ? ticket.webStatus : null;
     if (!status) return editable
       ? <div className="golive-skip-actions">
         <button type="button" className="text-button golive-skip-button" disabled={busy} onClick={() => void setWebStatus(ticket, "tested")}><CheckCircle2 size={14} /> Đã test xong</button>
@@ -356,7 +357,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
   const appStatusOf = (ticket: Ticket) => ticket.failedAt ? "Test Failed" : fullyTested(ticket) ? "Done" : "In Progress";
   // The web outcome reads the same way: failed is Test Failed, the other three settle it as Done.
   const webStatusOf = (ticket: Ticket) => manual ? (ticket.assigneeUserId && ticket.assigneeUserId in web.signed ? "Done" : "In Progress")
-    : ticket.webStatus === "failed" ? "Test Failed" : ticket.webStatus ? "Done" : "In Progress";
+    : ticket.webStatus === "failed" ? "Test Failed" : isWebStatus(ticket.webStatus) ? "Done" : "In Progress";
   // The status column and its filters follow the phase the release is in.
   const statusOf = (ticket: Ticket) => appPhase ? appStatusOf(ticket) : webStatusOf(ticket);
   const counts = (["In Progress", "Test Failed", "Done"] as const).map(status => [status, tickets.filter(item => statusOf(item) === status).length] as const);
@@ -399,7 +400,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
   const iSignedWeb = currentUserId in web.signed, iAmQe = web.qe.some(person => person.userId === currentUserId);
   const running = !!current && !current.completedAt;
   // A QE confirms the web test only after every one of their tickets has a settled web outcome.
-  const myWebOpen = manual ? 0 : tickets.filter(item => item.assigneeUserId === currentUserId && (!item.webStatus || item.webStatus === "failed")).length;
+  const myWebOpen = manual ? 0 : tickets.filter(item => item.assigneeUserId === currentUserId && !webSettled(item.webStatus)).length;
   // Phase 1 is the web build; once every QE confirms it, the device checklist below is the app phase.
   const webPanel = web.qe.length === 0
     ? <section className="golive-web panel"><div className="golive-web-head"><span className="golive-web-step"><Globe size={16} /> Giai đoạn 1 · Test web</span></div><p className="golive-web-note">Chưa có tài khoản QE nào để theo dõi test web.</p>{me?.role === "Manager" && <button type="button" className="outline-button" onClick={onManageRoles}>Gán role QE</button>}</section>

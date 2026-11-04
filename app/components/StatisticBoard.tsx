@@ -369,8 +369,9 @@ export function StatisticBoard({ people, currentUserId, onToast, onError }: { pe
                     {!manual && <td className="stat-web-status">{(() => {
                       const kind = webKindOf(ticket.webStatus);
                       return <span className="stat-done-stamp"><span className={webChip(kind)}>{WEB_LABEL[kind]}</span>
-                        {ticket.webAt && <small>{prettyStamp(ticket.webAt)}{ticket.webBy ? " · " + ticket.webBy : ""}</small>}
-                        {ticket.webReason && <small className={kind === "failed" ? "stat-fail-reason" : ""}>{ticket.webReason}</small>}</span>;
+                        {/* Who and when only mean something once the ticket has a web outcome. */}
+                        {kind !== "open" && ticket.webAt && <small>{prettyStamp(ticket.webAt)}{ticket.webBy ? " · " + ticket.webBy : ""}</small>}
+                        {(kind === "cannotTest" || kind === "failed") && ticket.webReason && <small className={kind === "failed" ? "stat-fail-reason" : ""}>{ticket.webReason}</small>}</span>;
                     })()}</td>}
                     <td className="golive-ticket-status"><span className={statusClass(statusOf(ticket))}>{statusOf(ticket)}</span></td>
                     <td className="stat-done-at">{done || ticket.failedAt

@@ -1396,3 +1396,15 @@ body .stat-details.is-open > .stat-section-toggle, body .stat-details > .stat-se
   body .stat-phase:not(.is-open) { padding-bottom: 0; }
   body .stat-details.is-open > .stat-section-toggle, body .stat-details > .stat-section-toggle { padding: 12px 16px; }
 }
+
+/* Ticket cards on phones (Statistic and Tracking Golive): the tick or checkbox centres on the key's line,
+   the status badge is solid for a finished or failed ticket so it reads at a glance, and the tester's
+   name reads at body size. */
+@media (max-width: 900px) {
+  body .stat-table td.stat-pick, body .table-panel .golive-table td.golive-pick { top: 12px; height: 28px; display: flex; align-items: center; }
+  body .stat-table .golive-key, body .table-panel .golive-table .golive-key { line-height: 28px; }
+  body .stat-table td.golive-ticket-status .status-chip, body .table-panel .golive-table td.golive-ticket-status .status-chip { font-size: 13px; font-weight: 600; padding: 4px 11px; border-radius: 999px; line-height: 20px; }
+  body .stat-table td.golive-ticket-status .status-chip.status-done, body .table-panel .golive-table td.golive-ticket-status .status-chip.status-done { background: #2f8a6f; color: #fff; }
+  body .stat-table td.golive-ticket-status .status-chip.status-failed, body .table-panel .golive-table td.golive-ticket-status .status-chip.status-failed { background: #c4505c; color: #fff; }
+  body .stat-table .golive-assignee .holder-identity, body .table-panel .golive-table .golive-assignee .holder-identity { font-size: 16px; }
+}

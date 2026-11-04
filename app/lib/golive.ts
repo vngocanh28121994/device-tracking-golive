@@ -67,6 +67,6 @@ export const WEB_STATUSES = ["tested", "not-needed", "cannot-test", "failed"] as
 export type WebStatus = typeof WEB_STATUSES[number];
 export const isWebStatus = (value: unknown): value is WebStatus => WEB_STATUSES.some(status => status === value);
 // A failed web test still needs work, like an untested one; the other three settle the ticket for the web.
-export const webSettled = (status: string | null | undefined) => !!status && status !== "failed";
+export const webSettled = (status: string | null | undefined) => isWebStatus(status) && status !== "failed";
 // The release is in the app phase once every QE confirmed the web test (and stays there once completed).
 export const inAppPhase = (qeIds: string[], signedIds: string[]) => qeIds.length > 0 && qeIds.every(id => signedIds.includes(id));
