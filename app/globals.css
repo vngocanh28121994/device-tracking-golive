@@ -1339,3 +1339,40 @@ body .stat-web > .stat-section-toggle small, body .stat-phase-head small {
   /* On a phone the meta drops under the title instead of squeezing it into two lines. */
   body .stat-web > .stat-section-toggle small, body .stat-phase-head small { flex-basis: calc(100% - 40px); margin-left: 40px; text-align: left; order: 3; }
 }
+
+/* Each phase's sections nest under its header: a guide line in the phase colour runs down from the
+   header's accent bar, and the sub-headers ("Thống kê theo người test", "Chi tiết ticket") are smaller,
+   with a dot in the phase colour. Phase 1 sits inside .stat-web's own padding; phase 2 lines up with its
+   header's 18px margin. */
+body .stat-phase-body { --phase-ink: var(--accent); --phase-line: #e3d7f5; margin: 8px 0 2px; padding-left: 16px; border-left: 2px solid var(--phase-line); }
+body .stat-phase-body-app { --phase-ink: #b7791f; --phase-line: #f3dfbf; margin: 6px 18px 12px; padding-left: 0; }
+:root[data-theme="dark"] body .stat-phase-body { --phase-line: #3a2f4d; }
+:root[data-theme="dark"] body .stat-phase-body-app { --phase-ink: #f0c98d; --phase-line: #4a3a22; }
+body .stat-phase-body .stat-web-done, body .stat-phase-body .stat-web-pending, body .stat-phase-body .stat-web-note { margin-top: 2px; }
+body .stat-phase-body-app > .empty { padding: 16px; }
+
+/* Sub-sections: no full-width rules between them inside a phase, just space. */
+body .stat-phase-body .stat-sub { padding: 6px 0 6px 16px; border-bottom: 0; }
+body .stat-phase-body .stat-web-testers { padding-left: 0; margin-top: 10px; }
+body .stat-phase-body .stat-sub.is-open { padding-bottom: 4px; }
+body .stat-phase-body .stat-details { padding-right: 0; }
+body .stat-phase-body .stat-sub > .stat-section-toggle {
+  padding: 8px 0; gap: 10px; font-size: 14px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--ink);
+}
+body .stat-phase-body .stat-sub > .stat-section-toggle > span { display: inline-flex; align-items: center; gap: 8px; }
+body .stat-phase-body .stat-sub > .stat-section-toggle > span::before { content: ""; width: 8px; height: 8px; border-radius: 3px; background: var(--phase-ink); flex: none; }
+body .stat-phase-body .stat-sub > .stat-section-toggle:hover { color: var(--phase-ink); }
+body .stat-phase-body .stat-sub > .stat-section-toggle small { font-size: 13px; font-weight: 400; }
+:root[data-theme="dark"] body .stat-phase-body .stat-sub > .stat-section-toggle { color: var(--ink); }
+body .stat-phase-body .stat-details .stat-selection { margin-top: 2px; padding: 10px 12px; border-radius: 10px; }
+body .stat-phase-body .stat-notify { padding: 12px; border-radius: 10px; margin-top: 8px; }
+@media (max-width: 900px) {
+  body .stat-phase-body { padding-left: 12px; }
+  body .stat-phase-body-app { margin: 6px 16px 12px; padding-left: 0; }
+  body .stat-phase-body .stat-sub { padding-left: 12px; }
+  body .stat-phase-body .stat-web-testers { padding-left: 0; }
+  body .stat-phase-body .stat-table tbody { padding: 8px 0 4px; }
+  /* The tiles are narrower inside the phase: keep a timestamp on one line. */
+  body .stat-phase-body .stat-table .stat-web-status, body .stat-phase-body .stat-table .stat-done-at { padding: 8px; }
+  body .stat-phase-body .stat-table .stat-done-stamp strong { font-size: 13px; white-space: nowrap; }
+}

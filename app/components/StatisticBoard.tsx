@@ -55,6 +55,7 @@ export function StatisticBoard({ people, currentUserId, onToast, onError }: { pe
   const [collapsedTesters, setCollapsedTesters] = useState<string[]>([]);
   const [collapsedDetails, setCollapsedDetails] = useState<string[]>([]);
   const [collapsedWeb, setCollapsedWeb] = useState<string[]>([]);
+  const [collapsedWebTesters, setCollapsedWebTesters] = useState<string[]>([]);
   const [webByRelease, setWebByRelease] = useState<Record<string, WebQe[]>>({});
   const isManager = people.find(person => person.userId === currentUserId)?.role === "Manager";
   const [tip, setTip] = useState<Tip | null>(null);
@@ -163,6 +164,7 @@ export function StatisticBoard({ people, currentUserId, onToast, onError }: { pe
         const testersOpen = !collapsedTesters.includes(release.id);
         const detailsOpen = !collapsedDetails.includes(release.id);
         const webOpen = !collapsedWeb.includes(release.id);
+        const webTestersOpen = !collapsedWebTesters.includes(release.id);
         const phase = phaseOf(release);
         const roster = webByRelease[release.id] || [];
         const webPending = roster.filter(person => !person.signedAt);
@@ -218,7 +220,7 @@ export function StatisticBoard({ people, currentUserId, onToast, onError }: { pe
                     <small>{!manual && tickets.length > 0 && webTicketsDone + "/" + tickets.length + " ticket · "}{roster.length ? roster.length - webPending.length + "/" + roster.length + " QE đã xác nhận" : "Chưa có QE"}</small>
                     <ChevronDown size={15} aria-hidden="true" />
                   </button>
-                  {webOpen && <div id={"stat-web-" + release.id}>
+                  {webOpen && <div id={"stat-web-" + release.id} className="stat-phase-body">
                     {roster.length === 0 ? <p className="stat-web-note">Chưa có tài khoản role QE nào để theo dõi test web.</p> : <>
                       {webPending.length === 0
                         ? <p className="stat-web-done" role="status"><CheckCircle2 size={16} aria-hidden="true" /> Tất cả QE đã xác nhận test web{phase === "app" ? ", đang test app ở giai đoạn 2." : "."}</p>
@@ -227,9 +229,14 @@ export function StatisticBoard({ people, currentUserId, onToast, onError }: { pe
                           {!release.completedAt && isManager && <button type="button" className="outline-button stat-clear" disabled={sending === "web:" + release.id}
                             onClick={() => void remindWeb(release.id)}><Bell size={15} /> {sending === "web:" + release.id ? "Đang gửi..." : "Nhắc nhở"}</button>}
                         </div>}
-                      {webTally.length > 0 && <>
-                        <p className="stat-sub-label">Thống kê theo người test</p>
-                        <div className="table-scroll"><table className="stat-tester-table"><thead><tr>
+                      {webTally.length > 0 && <div className={"stat-web-testers stat-section stat-sub" + (webTestersOpen ? " is-open" : "")}>
+                        <button type="button" className="stat-section-toggle" aria-expanded={webTestersOpen} aria-controls={"stat-web-testers-" + release.id}
+                          onClick={() => toggle(release.id, setCollapsedWebTesters)}>
+                          <span>Thống kê theo người test</span>
+                          <small>{webTally.length} người test</small>
+                          <ChevronDown size={15} aria-hidden="true" />
+                        </button>
+                        {webTestersOpen && <div id={"stat-web-testers-" + release.id} className="table-scroll"><table className="stat-tester-table"><thead><tr>
                           <th>NGƯỜI TEST</th><th>TIẾN ĐỘ TEST WEB</th><th>CHƯA XONG WEB</th>
                         </tr></thead><tbody>{webTally.map(tester => {
                           const account = people.find(item => item.userId === tester.userId);
@@ -254,8 +261,8 @@ export function StatisticBoard({ people, currentUserId, onToast, onError }: { pe
                               onMouseEnter={tester.open + tester.failed > 0 ? (event => showTip(event, tester, tester.open + tester.failed + " ticket chưa xong web", item => mine(item) && ["open", "failed"].includes(webKindOf(item.webStatus)))) : undefined}
                               onMouseLeave={() => setTip(null)}>{tester.open + tester.failed}</strong></td>
                           </tr>;
-                        })}</tbody></table></div>
-                      </>}
+                        })}</tbody></table></div>}
+                      </div>}
                       {/* A manual golive has no tickets, so each QE's own sign-off is all there is to show. */}
                       {manual && <div className="table-scroll"><table className="stat-web-table"><thead><tr>
                         <th>QE</th><th>TRẠNG THÁI</th><th>THỜI ĐIỂM XÁC NHẬN</th>
@@ -276,8 +283,9 @@ export function StatisticBoard({ people, currentUserId, onToast, onError }: { pe
                 </div>
                 <div className="stat-phase-head"><Smartphone size={14} aria-hidden="true" /> Giai đoạn 2 · Test app
                   <small>{phase === "web" ? "Chờ test web hoàn tất" : release.done + "/" + release.total + " " + rowLabel + " done"}</small></div>
+                <div className="stat-phase-body stat-phase-body-app">
                 {tickets.length === 0 ? <p className="empty">Đợt golive này chưa có {rowLabel} nào.</p> : <>
-                <div className={"stat-testers stat-section" + (testersOpen ? " is-open" : "")}>
+                <div className={"stat-testers stat-section stat-sub" + (testersOpen ? " is-open" : "")}>
                   <button type="button" className="stat-section-toggle" aria-expanded={testersOpen} aria-controls={"stat-testers-" + release.id}
                     onClick={() => toggle(release.id, setCollapsedTesters)}>
                     <span>Thống kê theo người test</span>
@@ -312,7 +320,7 @@ export function StatisticBoard({ people, currentUserId, onToast, onError }: { pe
                     </tr>;
                   })}</tbody></table></div>}
                 </div>
-                <div className={"stat-details stat-section" + (detailsOpen ? " is-open" : "")}>
+                <div className={"stat-details stat-section stat-sub" + (detailsOpen ? " is-open" : "")}>
                 <button type="button" className="stat-section-toggle" aria-expanded={detailsOpen} aria-controls={"stat-details-" + release.id}
                   onClick={() => toggle(release.id, setCollapsedDetails)}>
                   <span>Chi tiết ticket</span>
@@ -370,6 +378,7 @@ export function StatisticBoard({ people, currentUserId, onToast, onError }: { pe
                 </div>}
                 </div>
                 </>}
+                </div>
               </>}
           </div>}
         </li>;
