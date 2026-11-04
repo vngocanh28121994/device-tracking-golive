@@ -56,6 +56,7 @@ export function StatisticBoard({ people, currentUserId, onToast, onError }: { pe
   const [collapsedDetails, setCollapsedDetails] = useState<string[]>([]);
   const [collapsedWeb, setCollapsedWeb] = useState<string[]>([]);
   const [collapsedWebTesters, setCollapsedWebTesters] = useState<string[]>([]);
+  const [collapsedApp, setCollapsedApp] = useState<string[]>([]);
   const [webByRelease, setWebByRelease] = useState<Record<string, WebQe[]>>({});
   const isManager = people.find(person => person.userId === currentUserId)?.role === "Manager";
   const [tip, setTip] = useState<Tip | null>(null);
@@ -165,6 +166,7 @@ export function StatisticBoard({ people, currentUserId, onToast, onError }: { pe
         const detailsOpen = !collapsedDetails.includes(release.id);
         const webOpen = !collapsedWeb.includes(release.id);
         const webTestersOpen = !collapsedWebTesters.includes(release.id);
+        const appOpen = !collapsedApp.includes(release.id);
         const phase = phaseOf(release);
         const roster = webByRelease[release.id] || [];
         const webPending = roster.filter(person => !person.signedAt);
@@ -213,7 +215,7 @@ export function StatisticBoard({ people, currentUserId, onToast, onError }: { pe
             {releaseError[release.id] ? <p className="empty">{releaseError[release.id]}</p>
               : !tickets ? <LoadingState label={"Đang tải " + rowLabel + "..."} />
               : <>
-                <div className={"stat-web stat-section" + (webOpen ? " is-open" : "")}>
+                <div className={"stat-web stat-phase stat-section" + (webOpen ? " is-open" : "")}>
                   <button type="button" className="stat-section-toggle" aria-expanded={webOpen} aria-controls={"stat-web-" + release.id}
                     onClick={() => toggle(release.id, setCollapsedWeb)}>
                     <span className="stat-phase-title"><Globe size={14} aria-hidden="true" /> Giai đoạn 1 · Test web</span>
@@ -281,11 +283,16 @@ export function StatisticBoard({ people, currentUserId, onToast, onError }: { pe
                     </>}
                   </div>}
                 </div>
-                <div className="stat-phase-head"><Smartphone size={14} aria-hidden="true" /> Giai đoạn 2 · Test app
-                  <small>{phase === "web" ? "Chờ test web hoàn tất" : release.done + "/" + release.total + " " + rowLabel + " done"}</small></div>
-                <div className="stat-phase-body stat-phase-body-app">
-                {tickets.length === 0 ? <p className="empty">Đợt golive này chưa có {rowLabel} nào.</p> : <>
-                <div className={"stat-testers stat-section stat-sub" + (testersOpen ? " is-open" : "")}>
+                <div className={"stat-app stat-phase stat-section" + (appOpen ? " is-open" : "")}>
+                  <button type="button" className="stat-section-toggle" aria-expanded={appOpen} aria-controls={"stat-app-" + release.id}
+                    onClick={() => toggle(release.id, setCollapsedApp)}>
+                    <span className="stat-phase-title"><Smartphone size={14} aria-hidden="true" /> Giai đoạn 2 · Test app</span>
+                    <small>{phase === "web" ? "Chờ test web hoàn tất" : release.done + "/" + release.total + " " + rowLabel + " done"}</small>
+                    <ChevronDown size={15} aria-hidden="true" />
+                  </button>
+                {appOpen && <div id={"stat-app-" + release.id} className="stat-phase-body">
+                {tickets.length === 0 ? <p className="empty">Đợt golive này chưa có {rowLabel} nào.</p>
+                :                 <div className={"stat-testers stat-section stat-sub" + (testersOpen ? " is-open" : "")}>
                   <button type="button" className="stat-section-toggle" aria-expanded={testersOpen} aria-controls={"stat-testers-" + release.id}
                     onClick={() => toggle(release.id, setCollapsedTesters)}>
                     <span>Thống kê theo người test</span>
@@ -319,15 +326,18 @@ export function StatisticBoard({ people, currentUserId, onToast, onError }: { pe
                         onMouseLeave={() => setTip(null)}>{tester.open}</strong></td>
                     </tr>;
                   })}</tbody></table></div>}
+                </div>}
+                </div>}
                 </div>
-                <div className={"stat-details stat-section stat-sub" + (detailsOpen ? " is-open" : "")}>
+                {/* Ticket details hold both phases' outcomes, so they sit beside the phases, not inside one. */}
+                {tickets.length > 0 && <div className={"stat-details stat-phase stat-section" + (detailsOpen ? " is-open" : "")}>
                 <button type="button" className="stat-section-toggle" aria-expanded={detailsOpen} aria-controls={"stat-details-" + release.id}
                   onClick={() => toggle(release.id, setCollapsedDetails)}>
-                  <span>Chi tiết ticket</span>
+                  <span className="stat-phase-title"><ListChecks size={14} aria-hidden="true" /> Chi tiết ticket</span>
                   <small>{tickets.length} {rowLabel}</small>
                   <ChevronDown size={15} aria-hidden="true" />
                 </button>
-                {detailsOpen && <div id={"stat-details-" + release.id}>
+                {detailsOpen && <div id={"stat-details-" + release.id} className="stat-phase-body">
                 <div className="stat-selection">
                   <span><ListChecks size={16} aria-hidden="true" /> Đã chọn <strong>{picked.length}</strong>/{openTickets.length} {rowLabel} chưa done</span>
                   {picked.length > 0 && <button type="button" className="outline-button stat-clear" onClick={() => writeSelected({ ...selected, [release.id]: [] })}><X size={15} /> Bỏ chọn</button>}
@@ -376,9 +386,7 @@ export function StatisticBoard({ people, currentUserId, onToast, onError }: { pe
                   </button>
                 </div>}
                 </div>}
-                </div>
-                </>}
-                </div>
+                </div>}
               </>}
           </div>}
         </li>;
