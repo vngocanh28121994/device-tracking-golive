@@ -1309,3 +1309,33 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
   body .stat-table .stat-done-stamp strong { font-size: 14px; font-weight: 500; }
   body .stat-table .stat-done-stamp small, body .stat-table .stat-done-at > .muted { font-size: 13px; }
 }
+
+/* Statistic phase headers ("Giai đoạn 1 · Test web", "Giai đoạn 2 · Test app") read as the headings of
+   their halves: a tinted band in the phase's own colour (as on the phase chip), an accent bar, the icon
+   in a tile and the title in sentence case. The sub-sections inside keep their small uppercase labels.
+   Comes last and is body-prefixed so it wins over the section-toggle and mobile rules above. */
+body .stat-web > .stat-section-toggle, body .stat-phase-head {
+  --phase-tint: var(--lavender); --phase-ink: var(--accent);
+  display: flex; align-items: center; gap: 10px 12px; flex-wrap: wrap;
+  padding: 10px 12px; border-radius: 12px; border-left: 4px solid var(--phase-ink);
+  background: var(--phase-tint); color: var(--ink);
+  font-size: 16px; font-weight: 650; letter-spacing: 0; text-transform: none; line-height: 1.3;
+}
+body .stat-phase-head { --phase-tint: #fff3e2; --phase-ink: #b7791f; margin: 14px 18px 4px; }
+body .stat-web > .stat-section-toggle:hover { color: var(--ink); filter: brightness(.98); }
+body .stat-phase-title { gap: 10px; flex: 1 1 auto; min-width: 0; }
+body .stat-web > .stat-section-toggle .stat-phase-title > svg, body .stat-phase-head > svg {
+  flex: none; width: 30px; height: 30px; padding: 7px; box-sizing: border-box; border-radius: 9px;
+  background: var(--surface); color: var(--phase-ink);
+}
+body .stat-web > .stat-section-toggle > svg:last-child { width: 18px; height: 18px; color: var(--phase-ink); }
+body .stat-web > .stat-section-toggle small, body .stat-phase-head small {
+  margin-left: auto; font-size: 13px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--muted); text-align: right;
+}
+:root[data-theme="dark"] body .stat-phase-head { --phase-tint: #3d2e1a; --phase-ink: #f0c98d; }
+:root[data-theme="dark"] body .stat-web > .stat-section-toggle { color: var(--ink); }
+@media (max-width: 900px) {
+  body .stat-phase-head { margin: 14px 16px 4px; }
+  /* On a phone the meta drops under the title instead of squeezing it into two lines. */
+  body .stat-web > .stat-section-toggle small, body .stat-phase-head small { flex-basis: calc(100% - 40px); margin-left: 40px; text-align: left; order: 3; }
+}
