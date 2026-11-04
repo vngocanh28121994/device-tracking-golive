@@ -1376,3 +1376,16 @@ body .stat-phase-body .stat-notify { padding: 12px; border-radius: 10px; margin-
   body .stat-phase-body .stat-table .stat-web-status, body .stat-phase-body .stat-table .stat-done-at { padding: 8px; }
   body .stat-phase-body .stat-table .stat-done-stamp strong { font-size: 13px; white-space: nowrap; }
 }
+
+/* Phase headers run edge to edge of the golive card: no accent border, no rounded corners, no side
+   margins. Phase 1's band cancels .stat-web's padding so it touches the card's edges and top. */
+body .stat-web > .stat-section-toggle, body .stat-phase-head { border-left: 0; border-radius: 0; padding: 12px 18px; }
+body .stat-web > .stat-section-toggle { width: calc(100% + 36px); margin: -12px -18px 0; }
+/* Folded, phase 1 is just its band: no white strip under it. */
+body .stat-web:not(.is-open) { padding-bottom: 0; }
+body .stat-phase-head { margin: 0 0 4px; }
+@media (max-width: 900px) {
+  body .stat-web > .stat-section-toggle, body .stat-phase-head { padding: 12px 16px; }
+  body .stat-web > .stat-section-toggle { width: calc(100% + 32px); margin: -12px -16px 0; }
+  body .stat-phase-head { margin: 0 0 4px; }
+}
