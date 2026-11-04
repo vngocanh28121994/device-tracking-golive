@@ -450,6 +450,13 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 .golive-stat strong { font-size: 20px; font-weight: 650; }
 .golive-stat:hover { border-color: #d6c8ea; }
 .golive-stat.active { border-color: var(--accent); background: var(--lavender); }
+/* Summary cards on Tracking Golive and Statistic alike: label at the top left, the number large
+   at the top right, a note across the bottom. Doubled class names outrank the phone overrides. */
+.golive-stats.golive-stats { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+.golive-stats .golive-stat.golive-stat { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto 1fr; align-items: start; column-gap: 12px; row-gap: 8px; padding: 14px 16px; }
+.golive-stats .golive-stat .status-chip { grid-column: 1; grid-row: 1; justify-self: start; white-space: nowrap; }
+.golive-stats .golive-stat strong { grid-column: 2; grid-row: 1; justify-self: end; font-size: 34px; font-weight: 700; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.golive-stats .golive-stat small { grid-column: 1 / -1; grid-row: 2; font-size: 12px; line-height: 1.45; color: var(--muted); }
 .status-chip { display: inline-block; font-size: 11px; font-weight: 650; padding: 4px 9px; border-radius: 6px; color: #5c566a; background: #efedf2; }
 .status-progress { color: #2f5f9e; background: #e7f0fb; }
 .status-review { color: #70538c; background: #f2edf9; }
@@ -682,6 +689,8 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
   .golive-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
   .golive-stat { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; min-width: 0; }
   .golive-stat strong { font-size: 18px; }
+  /* Two cards a row on phones; an odd last card takes the whole row instead of leaving a gap. */
+  .golive-stats > .golive-stat:last-child:nth-child(odd) { grid-column: 1 / -1; }
   .golive-toolbar { margin-bottom: 10px; }
   .golive-mine { min-height: 44px; font-size: 14px; }
   .golive-mobile-tools { display: flex; gap: 8px; margin-bottom: 14px; }
@@ -753,14 +762,6 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 /* Statistic: one collapsible card per golive, with the ticket report inside. */
 .stat-summary .golive-stat { cursor: default; gap: 6px; }
 .stat-summary .golive-stat:hover { border-color: var(--line); }
-.stat-summary .golive-stat small { font-size: 12px; color: var(--muted); }
-/* Label at the top left, the number large at the top right, the note across the bottom. */
-.golive-stats.stat-summary { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
-.stat-summary .golive-stat .status-chip { white-space: nowrap; }
-.stat-summary .golive-stat.golive-stat { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto 1fr; align-items: start; column-gap: 12px; row-gap: 8px; padding: 14px 16px; }
-.stat-summary .golive-stat .status-chip { grid-column: 1; grid-row: 1; justify-self: start; }
-.stat-summary .golive-stat strong { grid-column: 2; grid-row: 1; justify-self: end; font-size: 34px; font-weight: 700; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
-.stat-summary .golive-stat small { grid-column: 1 / -1; grid-row: 2; line-height: 1.45; }
 .stat-releases { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
 .stat-release { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
 .stat-release.is-open { border-color: #d6c8ea; }
