@@ -538,7 +538,7 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 .golive-checklist .checked small { color: #326c57; }
 .golive-table tr:has(.golive-checklist.complete) { background: #f6fbf8; }
 .golive-table .golive-assignee { min-width: 180px; }
-.golive-table td.golive-ticket-status { min-width: 150px; }
+.golive-table td.golive-ticket-status { min-width: 130px; }
 .golive-table th:last-child { text-align: left; }
 .signin-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px; margin-bottom: 24px; background: var(--lavender); border: 1px solid #ddd0f0; border-radius: 14px; }
 .signin-banner strong { font-size: 15px; }
@@ -569,6 +569,8 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
   .table-panel .golive-table tbody tr:has(td.golive-pick) { position: relative; padding-left: 50px; }
   /* Phones keep the top bar pinned, so the bulk bar sticks just below it. */
   body .golive-bulk { top: 68px; }
+  /* On a card the locked phase spans the full width of its section. */
+  body .golive-phase-lock { width: 100%; max-width: none; font-size: 13px; }
   .golive-bulk-actions { width: 100%; }
   .golive-bulk-actions .outline-button { flex: 1 1 calc(50% - 4px); justify-content: center; }
   .table-panel .golive-table .golive-key { grid-column: 1; grid-row: 1; align-self: center; overflow-wrap: anywhere; white-space: normal; font-size: 14px; }
@@ -608,8 +610,12 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 .golive-web-cell .muted { font-size: 12px; }
 .golive-web-outcome { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #28715d; }
 .golive-web-cell.golive-phase-locked > * { opacity: .6; }
-.golive-phase-lock { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; max-width: 170px; padding: 8px 10px; border: 1px dashed var(--line); border-radius: 10px; font-size: 12px; line-height: 1.4; color: var(--muted); }
-.golive-phase-lock small { flex-basis: 100%; }
+/* Icon on the left, the copy on its right; the copy wraps inside its own column, never under the icon. */
+.table-panel .golive-table td.golive-devices.golive-phase-locked { min-width: 170px; }
+.golive-phase-lock { display: flex; align-items: flex-start; gap: 8px; box-sizing: border-box; max-width: 220px; padding: 9px 11px; border: 1px dashed var(--line); border-radius: 10px; font-size: 12px; line-height: 1.45; color: var(--muted); }
+.golive-phase-lock > svg { flex: none; margin-top: 1px; }
+.golive-phase-lock-text { display: grid; gap: 2px; min-width: 0; }
+.golive-phase-lock-text small { font-size: 11px; }
 .golive-fail-hint { font-style: italic; }
 .golive-fail-button { color: #a3333d; }
 .golive-fail-button:hover { color: #86202a; }
