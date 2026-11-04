@@ -1242,3 +1242,69 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 :root[data-theme="dark"] .stat-table tr.stat-row-done .stat-web-status, :root[data-theme="dark"] .stat-table tr.stat-row-done .stat-done-at { background: #1f2f25; }
 :root[data-theme="dark"] .golive-table tr.golive-row-picked { background: #2c2140; }
 :root[data-theme="dark"] .golive-bulk { border-color: #453857; box-shadow: none; }
+
+/* Mobile readability pass for Tracking Golive and Statistic. Comes last so it wins over the earlier
+   per-component phone rules; body-prefixed selectors outrank their deeper ones.
+   - Reading text at 15px, secondary text at no less than 13px.
+   - Bold only for headings: page and section titles, golive names, ticket keys, summary numbers.
+     Status chips, outcomes, timestamps and counts drop to medium or regular weight.
+   - Space: the heading's main action spans the row, and a golive card puts its icon beside its name. */
+@media (max-width: 900px) {
+  body { font-size: 15px; }
+  body .page-heading p { font-size: 15px; line-height: 1.5; }
+  body .golive-heading-actions .primary-button { grid-column: 1 / -1; }
+
+  /* Chips and small labels */
+  body .status-chip { font-size: 13px; font-weight: 500; padding: 4px 9px; }
+  body .text-button, body .golive-skip-button, body .golive-skip-actions .golive-skip-button { font-size: 14px; font-weight: 500; }
+  body .holder-identity { font-size: 15px; font-weight: 400; }
+
+  /* Summary cards */
+  body .golive-stats .golive-stat strong { font-weight: 600; }
+  body .golive-stats .golive-stat small { font-size: 13px; }
+
+  /* Tracking Golive web-phase panel */
+  body .golive-web-done-text strong { font-size: 15px; font-weight: 600; }
+  body .golive-web-done-text small, body .golive-web-note, body .golive-web-count, body .golive-web-label { font-size: 14px; }
+  body .golive-progress { font-size: 14px; }
+
+  /* Ticket cards (both screens): the key is the card's heading, everything else reads as text */
+  body .table-panel .golive-table .golive-key, body .stat-table .golive-key { font-size: 16px; font-weight: 600; }
+  body .table-panel .golive-table .golive-summary, body .stat-table .golive-summary { font-size: 15px; line-height: 1.45; }
+  body .table-panel .golive-table td.golive-web-cell::before, body .table-panel .golive-table td.golive-devices::before,
+  body .stat-table .stat-web-status::before, body .stat-table .stat-done-at::before { font-size: 12px; font-weight: 500; letter-spacing: .04em; }
+  body .table-panel .golive-table .golive-skipped-label strong, body .table-panel .golive-table td.golive-phase-locked .golive-skipped-label strong { font-size: 15px; font-weight: 500; }
+  body .golive-skipped-label small, body .golive-skip-notified { font-size: 13px; font-weight: 500; }
+  body .golive-skip-reason, body .table-panel .golive-table td.golive-phase-locked .golive-skip-reason { font-size: 14px; }
+  body .table-panel .golive-table td.golive-phase-locked .golive-phase-lock { font-size: 13px; }
+  body .golive-device-name { font-size: 15px; font-weight: 500; }
+  body .golive-device-copy small, body .golive-device-count, body .table-panel .golive-table .golive-devices .muted { font-size: 13px; }
+  body .golive-bulk, body .golive-bulk-actions .outline-button, body .golive-bulk-actions .text-button { font-size: 14px; }
+  /* A locked phase with a reason runs onto several lines: keep its label at the top, not centred. */
+  body .table-panel .golive-table td.golive-phase-locked { align-items: flex-start; }
+  /* The four outcome buttons as a tidy 2 x 2 grid instead of two loose rows. */
+  body .table-panel .golive-table .golive-skip-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; margin-top: 2px; }
+  body .table-panel .golive-table .golive-skip-actions .golive-skip-button { min-height: 40px; padding: 6px 0; white-space: normal; text-align: left; }
+  body .golive-toolbar > span { font-size: 13px; }
+
+  /* Statistic: golive card head, icon beside the name */
+  body .stat-release-head { gap: 10px 12px; padding: 14px 16px; }
+  body .stat-release-icon { width: 34px; height: 34px; flex-basis: 34px; }
+  /* Icon, name and chevron fill the first line; the phase chip and the bars wrap below. */
+  body .stat-release-main { flex: 1 1 calc(100% - 90px); order: 0; min-width: 0; }
+  body .stat-release-head .golive-version { order: 2; }
+  body .stat-release-main strong { font-size: 16px; }
+  body .stat-release-main small, body .stat-release-progress small, body .stat-phase-chip { font-size: 13px; font-weight: 500; }
+
+  /* Statistic sections */
+  body .stat-section-toggle, body .stat-phase-head, body .stat-sub-label { font-size: 12px; font-weight: 600; }
+  body .stat-section-toggle small, body .stat-phase-head small { font-size: 13px; font-weight: 400; }
+  body .stat-web-done { font-size: 14px; font-weight: 500; }
+  body .stat-web-pending, body .stat-web-note, body .stat-selection { font-size: 14px; }
+  body .stat-tester-table .stat-stack-counts { font-size: 13px; }
+  body .stat-tester-table .stat-stack-counts strong { font-size: 16px; font-weight: 600; }
+  body .stat-tester-table td.stat-tester-open.stat-tester-open::before { font-size: 13px; }
+  body .stat-tester-table .stat-tester-open strong { font-size: 18px; font-weight: 600; }
+  body .stat-table .stat-done-stamp strong { font-size: 14px; font-weight: 500; }
+  body .stat-table .stat-done-stamp small, body .stat-table .stat-done-at > .muted { font-size: 13px; }
+}
