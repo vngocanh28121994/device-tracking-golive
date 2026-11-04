@@ -223,7 +223,7 @@ export function StatisticBoard({ people, currentUserId, onToast, onError }: { pe
                       {webPending.length === 0
                         ? <p className="stat-web-done" role="status"><CheckCircle2 size={16} aria-hidden="true" /> Tất cả QE đã xác nhận test web{phase === "app" ? ", đang test app ở giai đoạn 2." : "."}</p>
                         : <div className="stat-web-pending">
-                          <span>Còn <strong>{webPending.length}</strong> QE chưa xác nhận test web{phase === "web" ? ", giai đoạn test app chưa bắt đầu." : "."}</span>
+                          <span>Còn <strong>{webPending.length}</strong> QE chưa xác nhận hoàn thành test web: {webPending.map(person => person.displayName).join(", ")}{phase === "web" ? ". Giai đoạn test app chưa bắt đầu." : "."}</span>
                           {!release.completedAt && isManager && <button type="button" className="outline-button stat-clear" disabled={sending === "web:" + release.id}
                             onClick={() => void remindWeb(release.id)}><Bell size={15} /> {sending === "web:" + release.id ? "Đang gửi..." : "Nhắc nhở"}</button>}
                         </div>}
@@ -255,9 +255,9 @@ export function StatisticBoard({ people, currentUserId, onToast, onError }: { pe
                               onMouseLeave={() => setTip(null)}>{tester.open + tester.failed}</strong></td>
                           </tr>;
                         })}</tbody></table></div>
-                        <p className="stat-sub-label">Xác nhận hoàn thành test web của QE</p>
                       </>}
-                      <div className="table-scroll"><table className="stat-web-table"><thead><tr>
+                      {/* A manual golive has no tickets, so each QE's own sign-off is all there is to show. */}
+                      {manual && <div className="table-scroll"><table className="stat-web-table"><thead><tr>
                         <th>QE</th><th>TRẠNG THÁI</th><th>THỜI ĐIỂM XÁC NHẬN</th>
                       </tr></thead><tbody>{roster.map(person => {
                         const account = people.find(item => item.userId === person.userId);
@@ -270,7 +270,7 @@ export function StatisticBoard({ people, currentUserId, onToast, onError }: { pe
                             ? <strong>{prettyStamp(person.signedAt)}</strong>
                             : <span className="muted"><Clock size={13} aria-hidden="true" /> Đang chờ</span>}</td>
                         </tr>;
-                      })}</tbody></table></div>
+                      })}</tbody></table></div>}
                     </>}
                   </div>}
                 </div>
