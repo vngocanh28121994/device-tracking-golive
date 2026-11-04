@@ -139,3 +139,19 @@ console.log("Statistic test-failed: outstanding rather than Done, and its own ma
   assert.equal(phaseOf({ completedAt: null, web: { total: 2, signed: 2, done: true } }), "app");
   assert.equal(phaseOf({ completedAt: "2026-11-03T00:00:00.000Z", web: { total: 2, signed: 1, done: false } }), "completed");
 }
+
+// Phase web per tester: three settled outcomes count as done, failed and untested stay outstanding.
+{
+  const { tallyWebByTester, webKindOf } = await import("../app/lib/statistic.ts");
+  assert.equal(webKindOf(null), "open");
+  assert.equal(webKindOf("not-needed"), "notNeeded");
+  const tally = tallyWebByTester([
+    { assignee: "An", assigneeUserId: "a", webStatus: "tested" },
+    { assignee: "An", assigneeUserId: "a", webStatus: "failed" },
+    { assignee: "Bình", assigneeUserId: "b", webStatus: "cannot-test" },
+    { assignee: "Bình", assigneeUserId: "b", webStatus: "not-needed" },
+    { assignee: "An ", assigneeUserId: "a", webStatus: null },
+  ]);
+  assert.deepEqual(tally.map(row => [row.name, row.done, row.failed, row.open, row.total]), [["An", 1, 1, 1, 3], ["Bình", 2, 0, 0, 2]]);
+  console.log("Statistic web phase: per-tester web outcomes and QE sign-offs hold.");
+}

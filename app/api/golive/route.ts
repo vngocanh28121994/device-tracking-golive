@@ -2,7 +2,7 @@ import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { requireMember } from "../../lib/member-access";
 import { getDb } from "../../../db";
 import { devices, goliveDeviceChecks, goliveReleases, goliveTicketDevices, goliveTickets, goliveWebSignoffs, userProfiles } from "../../../db/schema";
-import { matchAccount } from "../../lib/golive";
+import { inAppPhase, isWebStatus, matchAccount, webSettled } from "../../lib/golive";
 import { waitUntil } from "cloudflare:workers";
 import { notifyRoles, notifyUsers, pushEnabled } from "../../lib/push";
 
@@ -90,6 +90,11 @@ async function webPhase(db: Db, releaseId: string) {
   ]);
   return { qe, signed: Object.fromEntries(rows.map(row => [row.userId, row.signedAt])) };
 }
+
+// Each phase locks the other's column: web outcomes while the web phase runs, the app checklist after.
+const appPhaseOf = (web: Awaited<ReturnType<typeof webPhase>>) => inAppPhase(web.qe.map(person => person.userId), Object.keys(web.signed));
+const WEB_PHASE_ONLY = "Đợt golive đang ở giai đoạn 1 · Test web. Phase app sẽ mở khi tất cả QE xác nhận hoàn thành test web.";
+const APP_PHASE_ONLY = "Đợt golive đã sang giai đoạn 2 · Test app, không sửa phase web được nữa.";
 
 async function deleteRelease(db: Db, releaseId: string) {
   await db.batch([
@@ -182,6 +187,7 @@ export async function POST(request: Request) {
       const tester = ticket.assigneeUserId ?? (ticket.assignee ? matchAccount(profiles, ticket.assignee) : null);
       if (tester !== user.userId) return error("Chỉ người test của ticket này mới được tích checklist.", 403);
       if (completedAt) return error("Đợt golive đã hoàn thành, không thể sửa checklist.", 409);
+      if (!appPhaseOf(await webPhase(db, ticket.releaseId))) return error(WEB_PHASE_ONLY, 409);
       if (ticket.skippedAt && ticket.skipKind !== "tested") return error("Ticket đã được đánh dấu không cần test hoặc không test được. Hãy thu hồi trước khi tích checklist.", 409);
       if (body.checked === false) {
         await db.batch([
@@ -213,6 +219,7 @@ export async function POST(request: Request) {
       // A tester without an account (or an outside helper) cannot act, so anyone signed in may mark that ticket.
       if (tester && tester !== user.userId && me?.role !== "Manager") return error("Chỉ người test của ticket hoặc Manager mới được đánh dấu ticket.", 403);
       if (completedAt) return error("Đợt golive đã hoàn thành, không thể sửa.", 409);
+      if (!appPhaseOf(await webPhase(db, ticket.releaseId))) return error(WEB_PHASE_ONLY, 409);
       const by = me?.displayName || user.displayName || user.email;
       // Undoing clears Done too; the next load marks it Done again if every device is already ticked.
       await db.update(goliveTickets).set(skipped
@@ -236,6 +243,7 @@ export async function POST(request: Request) {
       const tester = ticket.assigneeUserId ?? (ticket.assignee ? matchAccount(profiles, ticket.assignee) : null);
       if (tester && tester !== user.userId && me?.role !== "Manager") return error("Chỉ người test của ticket hoặc Manager mới được đánh dấu ticket.", 403);
       if (completedAt) return error("Đợt golive đã hoàn thành, không thể sửa.", 409);
+      if (!appPhaseOf(await webPhase(db, ticket.releaseId))) return error(WEB_PHASE_ONLY, 409);
       const by = me?.displayName || user.displayName || user.email;
       // Failing a ticket takes Done away and clears any skip mark; undoing lets the next load decide
       // Done again from the device ticks, exactly as undoing a skip does.
@@ -246,15 +254,49 @@ export async function POST(request: Request) {
       const updated = tickets[0];
       return Response.json({ doneAt: updated?.doneAt ?? null, failedAt: updated?.failedAt ?? null, failedBy: updated?.failedBy ?? null, failedReason: updated?.failedReason ?? "", skippedAt: updated?.skippedAt ?? null, skippedBy: updated?.skippedBy ?? null, skipKind: updated?.skipKind ?? "not-needed", skipReason: updated?.skipReason ?? "", skipNotified: updated?.skipNotified ?? false });
     }
+    if (body.action === "web-status") {
+      const ticketId = Number(body.ticketId), status = body.status === null ? null : isWebStatus(body.status) ? body.status : undefined;
+      if (status === undefined) return error("Trạng thái phase web không hợp lệ.");
+      const reason = status === "cannot-test" || status === "failed" ? clean(body.reason, 500) : "";
+      if (status === "cannot-test" && !reason) return error("Hãy nhập lý do không test được.");
+      if (status === "failed" && !reason) return error("Hãy nhập lý do test failed.");
+      const [[found], profiles] = await Promise.all([
+        ticketWithRelease(db, ticketId),
+        db.select({ userId: userProfiles.userId, displayName: userProfiles.displayName, role: userProfiles.role }).from(userProfiles),
+      ]);
+      if (!found) return error("Không tìm thấy ticket.", 404);
+      const { ticket, completedAt } = found;
+      const me = profiles.find(item => item.userId === user.userId);
+      const tester = ticket.assigneeUserId ?? (ticket.assignee ? matchAccount(profiles, ticket.assignee) : null);
+      if (tester && tester !== user.userId && me?.role !== "Manager") return error("Chỉ người test của ticket hoặc Manager mới được đánh dấu ticket.", 403);
+      if (completedAt) return error("Đợt golive đã hoàn thành, không thể sửa.", 409);
+      if (appPhaseOf(await webPhase(db, ticket.releaseId))) return error(APP_PHASE_ONLY, 409);
+      const by = me?.displayName || user.displayName || user.email;
+      const values = status
+        ? { webStatus: status, webAt: now, webBy: by, webReason: reason, webNotified: status === "cannot-test" && body.notified === true }
+        : { webStatus: null, webAt: null, webBy: null, webReason: "", webNotified: false };
+      await db.update(goliveTickets).set(values).where(eq(goliveTickets.id, ticketId));
+      return Response.json(values);
+    }
     if (body.action === "web-signoff") {
       const releaseId = clean(body.releaseId, 60), done = body.done !== false;
       const [[release], [me]] = await Promise.all([
-        db.select({ completedAt: goliveReleases.completedAt, name: goliveReleases.name }).from(goliveReleases).where(eq(goliveReleases.id, releaseId)),
+        db.select({ completedAt: goliveReleases.completedAt, name: goliveReleases.name, source: goliveReleases.source }).from(goliveReleases).where(eq(goliveReleases.id, releaseId)),
         db.select({ role: userProfiles.role }).from(userProfiles).where(eq(userProfiles.userId, user.userId)),
       ]);
       if (!release) return error("Không tìm thấy đợt golive.", 404);
       if (release.completedAt) return error("Đợt golive đã hoàn thành, không thể sửa.", 409);
       if (me?.role !== "QE") return error("Chỉ tài khoản QE mới xác nhận hoàn thành test web.", 403);
+      if (done) {
+        // Every ticket of this QE needs a settled web outcome first, so the web column is never left blank.
+        const [rows, profiles] = await Promise.all([
+          db.select({ issueKey: goliveTickets.issueKey, assignee: goliveTickets.assignee, assigneeUserId: goliveTickets.assigneeUserId, webStatus: goliveTickets.webStatus, summary: goliveTickets.summary }).from(goliveTickets).where(eq(goliveTickets.releaseId, releaseId)),
+          db.select({ userId: userProfiles.userId, displayName: userProfiles.displayName }).from(userProfiles),
+        ]);
+        // A manual golive has one row per QE, so the sign-off itself is that row's web outcome.
+        const open = release.source === "manual" ? [] : rows.filter(row => (row.assigneeUserId ?? (row.assignee ? matchAccount(profiles, row.assignee) : null)) === user.userId && !webSettled(row.webStatus));
+        if (open.length) return Response.json({ error: "Còn " + open.length + " ticket của bạn chưa có trạng thái phase web (hoặc đang Test failed): " + open.slice(0, 5).map(row => row.issueKey).join(", ") + (open.length > 5 ? "…" : "") + ".", unfinished: open.map(row => ({ issueKey: row.issueKey, summary: row.summary, assignee: row.assignee })) }, { status: 409 });
+      }
       if (done) await db.insert(goliveWebSignoffs).values({ releaseId, userId: user.userId, signedAt: now }).onConflictDoNothing();
       else await db.delete(goliveWebSignoffs).where(and(eq(goliveWebSignoffs.releaseId, releaseId), eq(goliveWebSignoffs.userId, user.userId)));
       const web = await webPhase(db, releaseId);

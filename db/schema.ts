@@ -103,6 +103,14 @@ export const goliveTickets = sqliteTable("golive_tickets", {
   failedAt: text("failed_at"),
   failedBy: text("failed_by"),
   failedReason: text("failed_reason").notNull().default(""),
+  // Phase 1 (web build): the tester picks one of the same four outcomes as the app phase, without
+  // a device checklist. null while untested; "tested" | "not-needed" | "cannot-test" | "failed".
+  webStatus: text("web_status"),
+  webAt: text("web_at"),
+  webBy: text("web_by"),
+  // Why the web test could not run or failed, and for "cannot-test" whether the scrum team was told.
+  webReason: text("web_reason").notNull().default(""),
+  webNotified: integer("web_notified", { mode: "boolean" }).notNull().default(false),
 }, table => [index("golive_tickets_release_id_idx").on(table.releaseId)]);
 
 export const goliveDeviceChecks = sqliteTable("golive_device_checks", {

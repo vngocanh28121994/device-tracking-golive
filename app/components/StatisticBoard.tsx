@@ -3,10 +3,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Ban, Bell, CheckCircle2, ChevronDown, Clock, Globe, ListChecks, Rocket, Smartphone, X } from "lucide-react";
 import { HolderIdentity } from "./HolderIdentity";
 import { LoadingState } from "./LoadingState";
-import { doneKindOf, markedAt, markedBy, markedHow, phaseOf, tallyByTester, TesterTally, WebQe, WebSummary } from "../lib/statistic";
+import { doneKindOf, markedAt, markedBy, markedHow, phaseOf, tallyByTester, tallyWebByTester, webKindOf, WebQe, WebSummary } from "../lib/statistic";
 
 type Release = { id: string; name: string; source: string; fixVersion: string; createdBy: string; createdAt: string; completedAt: string | null; completedBy: string | null; total: number; done: number; failed: number; web: WebSummary };
-type Ticket = { id: number; issueKey: string; summary: string; assignee: string; assigneeUserId: string | null; doneAt: string | null; skippedAt: string | null; skippedBy: string | null; skipKind: string; testedDevices: number; lastCheckedAt: string | null; failedAt: string | null; failedBy: string | null; failedReason: string };
+type Ticket = { id: number; issueKey: string; summary: string; assignee: string; assigneeUserId: string | null; doneAt: string | null; skippedAt: string | null; skippedBy: string | null; skipKind: string; testedDevices: number; lastCheckedAt: string | null; failedAt: string | null; failedBy: string | null; failedReason: string; webStatus: string | null; webAt: string | null; webBy: string | null; webReason: string };
 type Person = { userId: string; displayName: string; avatar: string; role?: string };
 // The hovered slice of a tester's bar, with the very tickets it stands for.
 type Tip = { x: number; y: number; label: string; tickets: Ticket[] };
@@ -32,6 +32,16 @@ const BAR_PARTS = [
   { kind: "failed", short: "test failed", label: "ticket test failed" },
   { kind: "open", short: "chưa test", label: "ticket chưa test" },
 ] as const;
+// Phase web outcomes, in the same order and colours as the app bar: settled first, outstanding last.
+const WEB_PARTS = [
+  { kind: "tested", cls: "onDevices", short: "đã test xong", label: "ticket đã test xong web" },
+  { kind: "cannotTest", cls: "cannotTest", short: "không test được", label: "ticket không test được web" },
+  { kind: "notNeeded", cls: "notNeeded", short: "không cần test", label: "ticket không cần test web" },
+  { kind: "failed", cls: "failed", short: "test failed", label: "ticket test web failed" },
+  { kind: "open", cls: "open", short: "chưa test", label: "ticket chưa test web" },
+] as const;
+const WEB_LABEL = { tested: "Đã test xong", notNeeded: "Không cần test", cannotTest: "Không test được", failed: "Test failed", open: "Chưa test" } as const;
+const webChip = (kind: keyof typeof WEB_LABEL) => "status-chip " + (kind === "failed" ? "status-failed" : kind === "open" ? "status-blocked" : "status-done");
 // The same two phases as the Tracking Golive board: QE confirm the web build, then test the app on devices.
 const PHASE_LABEL = { web: "Giai đoạn 1 · Test web", app: "Giai đoạn 2 · Test app", completed: "Hoàn thành" } as const;
 const NO_WEB: WebSummary = { total: 0, signed: 0, done: false };
@@ -156,11 +166,13 @@ export function StatisticBoard({ people, currentUserId, onToast, onError }: { pe
         const phase = phaseOf(release);
         const roster = webByRelease[release.id] || [];
         const webPending = roster.filter(person => !person.signedAt);
+        const webTally = tickets && !manual ? tallyWebByTester(tickets) : [];
+        const webTicketsDone = webTally.reduce((sum, tester) => sum + tester.done, 0);
         const webPercent = release.web.total ? Math.round(release.web.signed / release.web.total * 100) : 0;
         const toggle = (id: string, setter: typeof setCollapsedTesters) =>
           setter(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id]);
         // Anchored to whatever was hovered and kept clear of both window edges.
-        const showTip = (event: React.MouseEvent<HTMLElement>, tester: TesterTally, label: string, matcher: (ticket: Ticket) => boolean) => {
+        const showTip = (event: React.MouseEvent<HTMLElement>, tester: { name: string }, label: string, matcher: (ticket: Ticket) => boolean) => {
           const rect = event.currentTarget.getBoundingClientRect();
           const matched = (tickets || []).filter(item => item.assignee.trim() === tester.name && matcher(item));
           setTip({ x: Math.min(Math.max(rect.left + rect.width / 2, 180), window.innerWidth - 180), y: rect.top, label, tickets: matched });
@@ -203,7 +215,7 @@ export function StatisticBoard({ people, currentUserId, onToast, onError }: { pe
                   <button type="button" className="stat-section-toggle" aria-expanded={webOpen} aria-controls={"stat-web-" + release.id}
                     onClick={() => toggle(release.id, setCollapsedWeb)}>
                     <span className="stat-phase-title"><Globe size={14} aria-hidden="true" /> Giai đoạn 1 · Test web</span>
-                    <small>{roster.length ? roster.length - webPending.length + "/" + roster.length + " QE đã xác nhận" : "Chưa có QE"}</small>
+                    <small>{!manual && tickets.length > 0 && webTicketsDone + "/" + tickets.length + " ticket · "}{roster.length ? roster.length - webPending.length + "/" + roster.length + " QE đã xác nhận" : "Chưa có QE"}</small>
                     <ChevronDown size={15} aria-hidden="true" />
                   </button>
                   {webOpen && <div id={"stat-web-" + release.id}>
@@ -215,6 +227,36 @@ export function StatisticBoard({ people, currentUserId, onToast, onError }: { pe
                           {!release.completedAt && isManager && <button type="button" className="outline-button stat-clear" disabled={sending === "web:" + release.id}
                             onClick={() => void remindWeb(release.id)}><Bell size={15} /> {sending === "web:" + release.id ? "Đang gửi..." : "Nhắc nhở"}</button>}
                         </div>}
+                      {webTally.length > 0 && <>
+                        <p className="stat-sub-label">Thống kê theo người test</p>
+                        <div className="table-scroll"><table className="stat-tester-table"><thead><tr>
+                          <th>NGƯỜI TEST</th><th>TIẾN ĐỘ TEST WEB</th><th>CHƯA XONG WEB</th>
+                        </tr></thead><tbody>{webTally.map(tester => {
+                          const account = people.find(item => item.userId === tester.userId);
+                          const percent = tester.total ? Math.round(tester.done / tester.total * 100) : 0;
+                          const parts = WEB_PARTS.filter(part => tester[part.kind] > 0);
+                          const mine = (item: Ticket) => item.assignee.trim() === tester.name;
+                          return <tr key={tester.name || "__none__"}>
+                            <td className="golive-assignee">{tester.name
+                              ? <HolderIdentity name={tester.name} avatar={account?.avatar || ""} role={account?.role} />
+                              : <span className="muted">Chưa có người test</span>}</td>
+                            <td className="stat-tester-done">
+                              <span className="stat-stack" role="img" aria-label={tester.done + "/" + tester.total + " ticket đã xong web" + parts.map(part => ", " + tester[part.kind] + " " + part.label).join("")}>
+                                {parts.map(part => <span key={part.kind} className={"stat-stack-part stat-part-" + part.cls} style={{ width: tester[part.kind] / tester.total * 100 + "%" }}
+                                  onMouseEnter={event => showTip(event, tester, tester[part.kind] + " " + part.label, item => mine(item) && webKindOf(item.webStatus) === part.kind)} onMouseLeave={() => setTip(null)} />)}
+                              </span>
+                              <span className="stat-stack-counts">
+                                <span className="stat-stack-total"><strong>{tester.done}</strong>/{tester.total} · {percent}%</span>
+                                {parts.map(part => <span key={part.kind} className={"stat-legend stat-legend-" + part.cls}>{tester[part.kind]} {part.short}</span>)}
+                              </span>
+                            </td>
+                            <td className="stat-tester-open"><strong className={tester.open + tester.failed > 0 ? "stat-count" : ""}
+                              onMouseEnter={tester.open + tester.failed > 0 ? (event => showTip(event, tester, tester.open + tester.failed + " ticket chưa xong web", item => mine(item) && ["open", "failed"].includes(webKindOf(item.webStatus)))) : undefined}
+                              onMouseLeave={() => setTip(null)}>{tester.open + tester.failed}</strong></td>
+                          </tr>;
+                        })}</tbody></table></div>
+                        <p className="stat-sub-label">Xác nhận hoàn thành test web của QE</p>
+                      </>}
                       <div className="table-scroll"><table className="stat-web-table"><thead><tr>
                         <th>QE</th><th>TRẠNG THÁI</th><th>THỜI ĐIỂM XÁC NHẬN</th>
                       </tr></thead><tbody>{roster.map(person => {
@@ -292,7 +334,7 @@ export function StatisticBoard({ people, currentUserId, onToast, onError }: { pe
                     onChange={event => writeSelected({ ...selected, [release.id]: event.target.checked ? openTickets.map(ticket => ticket.id) : [] })}
                   /></th>
                   {!manual && <><th>MÃ</th><th>TÊN TICKET</th></>}
-                  <th>NGƯỜI TEST</th><th>TRẠNG THÁI</th><th>QE ĐÁNH DẤU DONE</th>
+                  <th>NGƯỜI TEST</th>{!manual && <th>PHASE WEB</th>}<th>PHASE APP</th><th>QE ĐÁNH DẤU DONE (APP)</th>
                 </tr></thead><tbody>{tickets.map(ticket => {
                   const done = !!ticket.doneAt, checked = picked.includes(ticket.id);
                   const person = people.find(item => item.userId === ticket.assigneeUserId);
@@ -306,6 +348,12 @@ export function StatisticBoard({ people, currentUserId, onToast, onError }: { pe
                     <td className="golive-assignee">{ticket.assignee
                       ? <HolderIdentity name={ticket.assignee} avatar={person?.avatar || ""} role={person?.role} />
                       : <span className="muted">Chưa có người test</span>}</td>
+                    {!manual && <td className="stat-web-status">{(() => {
+                      const kind = webKindOf(ticket.webStatus);
+                      return <span className="stat-done-stamp"><span className={webChip(kind)}>{WEB_LABEL[kind]}</span>
+                        {ticket.webAt && <small>{prettyStamp(ticket.webAt)}{ticket.webBy ? " · " + ticket.webBy : ""}</small>}
+                        {ticket.webReason && <small className={kind === "failed" ? "stat-fail-reason" : ""}>{ticket.webReason}</small>}</span>;
+                    })()}</td>}
                     <td className="golive-ticket-status"><span className={statusClass(statusOf(ticket))}>{statusOf(ticket)}</span></td>
                     <td className="stat-done-at">{done || ticket.failedAt
                       ? <span className="stat-done-stamp"><strong>{at ? prettyStamp(at) : "Không rõ thời điểm"}</strong><small>{markedHow(ticket)}{markedBy(ticket) ? " · " + markedBy(ticket) : ""}</small>{ticket.failedAt && ticket.failedReason && <small className="stat-fail-reason">{ticket.failedReason}</small>}</span>

@@ -1,12 +1,12 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, History, CheckCircle2, ArrowUp, ArrowUpDown, Ban, Bell, Check, CircleSlash, Pencil, Globe, FileUp, Laptop, ListFilter, Plus, Rocket, Search, Smartphone, Tablet, Trash2, Undo2, X, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, History, CheckCircle2, ArrowUp, ArrowUpDown, Ban, Bell, Check, CircleSlash, Pencil, Globe, FileUp, Laptop, ListFilter, Plus, Rocket, Lock, Search, Smartphone, Tablet, Trash2, Undo2, X, XCircle } from "lucide-react";
 import { StyledSelect } from "./StyledSelect";
 import { HolderIdentity } from "./HolderIdentity";
 import { LoadingState } from "./LoadingState";
 import { useConfirm } from "./ConfirmDialog";
 import { readUrlParam, writeUrlParams } from "../lib/url-state";
-import { ImportedTicket, normalizeName, releaseNameFromCsv, ticketsFromCsv } from "../lib/golive";
+import { ImportedTicket, inAppPhase, normalizeName, releaseNameFromCsv, ticketsFromCsv, WebStatus } from "../lib/golive";
 import { ManualGoliveDialog } from "./ManualGoliveDialog";
 import { CannotTestDialog } from "./CannotTestDialog";
 import { TestFailedDialog } from "./TestFailedDialog";
@@ -15,7 +15,7 @@ import { PushToggle } from "./PushToggle";
 type Release = { id: string; name: string; source: string; fixVersion: string; createdBy: string; createdAt: string; completedAt: string | null; completedBy: string | null; ticketCount?: number };
 const MAX_HISTORY = 10;
 type Unfinished = { issueKey: string; summary: string; assignee: string };
-type Ticket = { id: number; releaseId: string; issueKey: string; summary: string; assignee: string; assigneeUserId: string | null; doneAt: string | null; skippedAt?: string | null; skippedBy?: string | null; skipKind?: string; skipReason?: string; skipNotified?: boolean; failedAt?: string | null; failedBy?: string | null; failedReason?: string };
+type Ticket = { id: number; releaseId: string; issueKey: string; summary: string; assignee: string; assigneeUserId: string | null; doneAt: string | null; skippedAt?: string | null; skippedBy?: string | null; skipKind?: string; skipReason?: string; skipNotified?: boolean; failedAt?: string | null; failedBy?: string | null; failedReason?: string; webStatus?: string | null; webAt?: string | null; webBy?: string | null; webReason?: string; webNotified?: boolean };
 const REFRESH_MS = 60_000;
 type Person = { userId: string; displayName: string; avatar: string; role?: string };
 type SortKey = "issueKey" | "summary" | "assignee";
@@ -44,8 +44,9 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
   const fileInput = useRef<HTMLInputElement>(null);
   const [confirm, confirmDialog] = useConfirm();
   const [creating, setCreating] = useState(false);
-  const [cannotTest, setCannotTest] = useState<{ ticket: Ticket; editing: boolean } | null>(null);
-  const [failing, setFailing] = useState<{ ticket: Ticket; editing: boolean } | null>(null);
+  // phase "web" routes the dialog's answer to the ticket's web outcome instead of the app one.
+  const [cannotTest, setCannotTest] = useState<{ ticket: Ticket; editing: boolean; phase?: "web" } | null>(null);
+  const [failing, setFailing] = useState<{ ticket: Ticket; editing: boolean; phase?: "web" } | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const load = useCallback(async (id = "") => {
@@ -87,7 +88,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
 
   async function post(body: Record<string, unknown>) {
     const r = await fetch("/api/golive", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const data = await r.json() as { error?: string; releaseId?: string; count?: number; doneAt?: string | null; skippedAt?: string | null; skippedBy?: string | null; skipKind?: string; skipReason?: string; skipNotified?: boolean; failedAt?: string | null; failedBy?: string | null; failedReason?: string; release?: Release; unfinished?: Unfinished[]; web?: WebPhase; pending?: number };
+    const data = await r.json() as { error?: string; releaseId?: string; count?: number; doneAt?: string | null; skippedAt?: string | null; skippedBy?: string | null; skipKind?: string; skipReason?: string; skipNotified?: boolean; failedAt?: string | null; failedBy?: string | null; failedReason?: string; webStatus?: string | null; webAt?: string | null; webBy?: string | null; webReason?: string; webNotified?: boolean; release?: Release; unfinished?: Unfinished[]; web?: WebPhase; pending?: number };
     if (!r.ok) throw Object.assign(new Error(data.error || "Không thể lưu thay đổi."), { unfinished: data.unfinished });
     return data;
   }
@@ -135,6 +136,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
   async function markFailed(reason: string) {
     if (!failing) return;
     const { ticket, editing } = failing;
+    if (failing.phase === "web") { if (await setWebStatus(ticket, "failed", reason)) setFailing(null); return; }
     setBusy(true);
     try {
       applyFail(ticket, await post({ action: "fail-test", ticketId: ticket.id, failed: true, reason }));
@@ -156,6 +158,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
   async function markCannotTest(reason: string, notified: boolean) {
     if (!cannotTest) return;
     const { ticket, editing } = cannotTest;
+    if (cannotTest.phase === "web") { if (await setWebStatus(ticket, "cannot-test", reason, notified)) setCannotTest(null); return; }
     setBusy(true);
     try {
       applySkip(ticket, await post({ action: "skip-test", ticketId: ticket.id, skipped: true, kind: "cannot-test", reason, notified }));
@@ -179,11 +182,31 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
     } catch (e) { onError(e instanceof Error ? e.message : "Không thể cập nhật ticket."); } finally { setBusy(false); }
   }
 
+  // Phase web: the tester picks one of the four outcomes directly; null takes it back.
+  const WEB_TOAST: Record<WebStatus, string> = { tested: "đã test xong web", "not-needed": "không cần test web", "cannot-test": "không test được web", failed: "test web failed" };
+  async function setWebStatus(ticket: Ticket, status: WebStatus | null, reason = "", notified = false) {
+    if (status === null && !await confirm({ title: "Thu hồi trạng thái phase web?", message: <>Ticket <strong>{ticket.issueKey}</strong> sẽ quay lại chưa test web.</>, confirmLabel: "Thu hồi" })) return false;
+    if ((status === "tested" || status === "not-needed") && !await confirm(status === "tested"
+      ? { title: "Xác nhận đã test xong web?", message: <>Ticket <strong>{ticket.issueKey}</strong> được ghi nhận đã test xong ở phase web.</>, confirmLabel: "Đã test xong" }
+      : { title: "Đánh dấu không cần test web?", message: <>Ticket <strong>{ticket.issueKey}</strong> được ghi nhận không cần test ở phase web. Có thể thu hồi sau.</>, confirmLabel: "Không cần test" })) return false;
+    setBusy(true);
+    try {
+      const result = await post({ action: "web-status", ticketId: ticket.id, status, reason, notified });
+      setTickets(current => current.map(item => item.id === ticket.id ? { ...item, webStatus: result.webStatus ?? null, webAt: result.webAt ?? null, webBy: result.webBy ?? null, webReason: result.webReason ?? "", webNotified: !!result.webNotified } : item));
+      onToast(status ? "Đã đánh dấu " + ticket.issueKey + " " + WEB_TOAST[status] : "Đã thu hồi trạng thái phase web của " + ticket.issueKey);
+      return true;
+    } catch (e) { onError(e instanceof Error ? e.message : "Không thể cập nhật ticket."); return false; } finally { setBusy(false); }
+  }
+
   async function signWeb(doneWeb: boolean) {
     if (!doneWeb && !await confirm({ title: "Thu hồi xác nhận test web?", message: "Tiến trình test web sẽ trừ bạn ra cho đến khi bạn xác nhận lại.", confirmLabel: "Thu hồi" })) return;
     setBusy(true);
     try { const result = await post({ action: "web-signoff", releaseId, done: doneWeb }); setWeb(result.web || NO_WEB); onToast(doneWeb ? "Đã xác nhận hoàn thành test web" : "Đã thu hồi xác nhận test web"); }
-    catch (e) { onError(e instanceof Error ? e.message : "Không thể cập nhật."); } finally { setBusy(false); }
+    catch (e) {
+      const list = (e as { unfinished?: Unfinished[] }).unfinished;
+      if (list?.length) { setStatusFilter("__all__"); setMineOnly(true); }
+      onError(e instanceof Error ? e.message : "Không thể cập nhật.");
+    } finally { setBusy(false); }
   }
 
   // Sends a push to every QE who has not confirmed the web test yet.
@@ -273,12 +296,46 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
       <button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => setFailing({ ticket, editing: true })}><Pencil size={14} /> Sửa</button>
       <button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => void clearFailed(ticket)}><Undo2 size={14} /> Thu hồi</button></span>}
   </div>;
+  // Phase web column: one of the four outcomes, picked while the web phase runs and locked after it.
+  // A manual golive has one row per QE, whose web outcome is that QE's own web sign-off.
+  const webCell = (ticket: Ticket) => {
+    if (manual) {
+      const at = ticket.assigneeUserId ? web.signed[ticket.assigneeUserId] : undefined;
+      return at ? <span className="golive-web-outcome"><CheckCircle2 size={15} aria-hidden="true" /> Đã xác nhận test web</span> : <span className="muted">Chưa xác nhận test web</span>;
+    }
+    const editable = !appPhase && canSkip(ticket), status = ticket.webStatus;
+    if (!status) return editable
+      ? <div className="golive-skip-actions">
+        <button type="button" className="text-button golive-skip-button" disabled={busy} onClick={() => void setWebStatus(ticket, "tested")}><CheckCircle2 size={14} /> Đã test xong</button>
+        <button type="button" className="text-button golive-skip-button" disabled={busy} onClick={() => void setWebStatus(ticket, "not-needed")}><Ban size={14} /> Không cần test</button>
+        <button type="button" className="text-button golive-skip-button" disabled={busy} onClick={() => setCannotTest({ ticket, editing: false, phase: "web" })}><CircleSlash size={14} /> Không test được</button>
+        <button type="button" className="text-button golive-skip-button golive-fail-button" disabled={busy} onClick={() => setFailing({ ticket, editing: false, phase: "web" })}><XCircle size={14} /> Test failed</button>
+      </div>
+      : <span className="muted">{appPhase ? "Không được đánh dấu ở phase web" : "Chưa test web"}</span>;
+    const reasoned = status === "cannot-test" || status === "failed";
+    return <div className={"golive-skipped" + (status === "tested" ? " golive-skipped-tested" : status === "cannot-test" ? " golive-skipped-cannot" : status === "failed" ? " golive-skipped-failed" : "")}>
+      <span className="golive-skipped-label"><strong>{status === "tested" ? <><CheckCircle2 size={16} aria-hidden="true" /> Đã test xong</> : status === "cannot-test" ? <><CircleSlash size={16} aria-hidden="true" /> Không test được</> : status === "failed" ? <><XCircle size={16} aria-hidden="true" /> Test failed</> : <><Ban size={16} aria-hidden="true" /> Không cần test</>}</strong>
+        {reasoned && ticket.webReason && <span className="golive-skip-reason">{ticket.webReason}</span>}
+        {status === "cannot-test" && <span className={"golive-skip-notified" + (ticket.webNotified ? " is-notified" : "")}>{ticket.webNotified ? <><Check size={13} aria-hidden="true" /> Đã báo scrum team</> : <><AlertTriangle size={13} aria-hidden="true" /> Chưa báo scrum team</>}</span>}
+        {ticket.webBy && <small>{status === "tested" ? "Xác nhận" : "Đánh dấu"} bởi {ticket.webBy}</small>}</span>
+      {editable && <span className="golive-skipped-actions">
+        {reasoned && <button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => status === "failed" ? setFailing({ ticket, editing: true, phase: "web" }) : setCannotTest({ ticket, editing: true, phase: "web" })}><Pencil size={14} /> Sửa</button>}
+        <button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => void setWebStatus(ticket, null)}><Undo2 size={14} /> Thu hồi</button></span>}
+    </div>;
+  };
   const isChecked = (ticket: Ticket, deviceId: string) => checks.some(item => item.ticketId === ticket.id && item.deviceId === deviceId);
   // Done is decided by the server and stays Done until a tick is removed.
   const fullyTested = (ticket: Ticket) => !!ticket.doneAt;
   // Status is derived: Done once the tester has ticked every device on the ticket, and Test Failed
   // while the tester has recorded a failure — which the server never lets be Done at the same time.
-  const statusOf = (ticket: Ticket) => ticket.failedAt ? "Test Failed" : fullyTested(ticket) ? "Done" : "In Progress";
+  // Phase 2 (app) opens once every QE confirmed the web test; a completed release is read in its app phase.
+  const appPhase = !!current?.completedAt || inAppPhase(web.qe.map(person => person.userId), Object.keys(web.signed));
+  const appStatusOf = (ticket: Ticket) => ticket.failedAt ? "Test Failed" : fullyTested(ticket) ? "Done" : "In Progress";
+  // The web outcome reads the same way: failed is Test Failed, the other three settle it as Done.
+  const webStatusOf = (ticket: Ticket) => manual ? (ticket.assigneeUserId && ticket.assigneeUserId in web.signed ? "Done" : "In Progress")
+    : ticket.webStatus === "failed" ? "Test Failed" : ticket.webStatus ? "Done" : "In Progress";
+  // The status column and its filters follow the phase the release is in.
+  const statusOf = (ticket: Ticket) => appPhase ? appStatusOf(ticket) : webStatusOf(ticket);
   const counts = (["In Progress", "Test Failed", "Done"] as const).map(status => [status, tickets.filter(item => statusOf(item) === status).length] as const);
   // Accent-insensitive, so "man hinh" finds "Màn hình".
   const fold = (value: string) => normalizeName(value).normalize("NFD").replace(/\p{M}/gu, "").replace(/đ/g, "d");
@@ -298,7 +355,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
     // Issue keys compare numerically within a project, so ON-2006 sorts before ON-2251.
     return [...rows].sort((a, b) => sort.dir * (a[sort.key] || "\uffff").localeCompare(b[sort.key] || "\uffff", "vi", { numeric: true, sensitivity: "base" }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tickets, query, keyFilter, summaryFilter, testerFilter, statusFilter, mineOnly, currentUserId, devicesByUser, checks, sort, projects]);
+  }, [tickets, query, keyFilter, summaryFilter, testerFilter, statusFilter, mineOnly, currentUserId, devicesByUser, checks, sort, projects, appPhase, web]);
   const filtered = keyFilter || summaryFilter || testerFilter !== "__all__" || query || statusFilter !== "__all__" || mineOnly;
   const columnFilterCount = Number(!!keyFilter) + Number(!!summaryFilter) + Number(testerFilter !== "__all__");
   const sortHeader = (key: SortKey, label: string) => {
@@ -311,6 +368,8 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
   const webDone = web.qe.length > 0 && webPending.length === 0;
   const iSignedWeb = currentUserId in web.signed, iAmQe = web.qe.some(person => person.userId === currentUserId);
   const running = !!current && !current.completedAt;
+  // A QE confirms the web test only after every one of their tickets has a settled web outcome.
+  const myWebOpen = manual ? 0 : tickets.filter(item => item.assigneeUserId === currentUserId && (!item.webStatus || item.webStatus === "failed")).length;
   // Phase 1 is the web build; once every QE confirms it, the device checklist below is the app phase.
   const webPanel = web.qe.length === 0
     ? <section className="golive-web panel"><div className="golive-web-head"><span className="golive-web-step"><Globe size={16} /> Giai đoạn 1 · Test web</span></div><p className="golive-web-note">Chưa có tài khoản QE nào để theo dõi test web.</p>{me?.role === "Manager" && <button type="button" className="outline-button" onClick={onManageRoles}>Gán role QE</button>}</section>
@@ -322,8 +381,9 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
           <span className="golive-web-count"><strong>{webSigned.length}/{web.qe.length}</strong> QE đã test web xong</span>
           {running && iAmQe && (iSignedWeb
             ? <span className="golive-web-mine"><Check size={15} /> Bạn đã xác nhận <button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => void signWeb(false)}><Undo2 size={14} /> Thu hồi</button></span>
-            : <button type="button" className="primary-button golive-web-sign" disabled={busy} onClick={() => void signWeb(true)}><CheckCircle2 size={17} /> Đã hoàn thành test web</button>)}
+            : <button type="button" className="primary-button golive-web-sign" disabled={busy || myWebOpen > 0} title={myWebOpen ? "Còn " + myWebOpen + " ticket của bạn chưa có trạng thái phase web" : ""} onClick={() => void signWeb(true)}><CheckCircle2 size={17} /> Đã hoàn thành test web</button>)}
         </div>
+        {!manual && <p className="golive-web-note">Chọn trạng thái ở cột <strong>Phase web</strong> cho từng ticket, rồi bấm “Đã hoàn thành test web”. Cột Phase app mở khi tất cả QE đã xác nhận.{running && iAmQe && !iSignedWeb && myWebOpen > 0 && <> Bạn còn <strong>{myWebOpen}</strong> ticket chưa có trạng thái phase web (hoặc đang Test failed).</>}</p>}
         <div className="golive-web-bar" role="progressbar" aria-label="Tiến trình test web" aria-valuemin={0} aria-valuemax={web.qe.length} aria-valuenow={webSigned.length}><span style={{ width: (webSigned.length / web.qe.length * 100) + "%" }} /></div>
         <div className="golive-web-pending">
           <span className="golive-web-label">Chưa xác nhận ({webPending.length})</span>
@@ -373,12 +433,14 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
           <label>NGƯỜI TEST<StyledSelect ariaLabel="Lọc theo người test" value={testerFilter} onChange={setTesterFilter} options={testerOptions} placeholder="Tất cả người test" /></label>
           {filtered && <button type="button" className="outline-button golive-clear" onClick={() => { resetFilters(); setMineOnly(false); }}><X size={15} /> Xoá lọc</button>}
         </div>
-        <section className="panel table-panel"><div className="table-scroll"><table className={"golive-table" + (manual ? " golive-manual-table" : "")}><thead><tr>{!manual && <>{sortHeader("issueKey", "MÃ")}{sortHeader("summary", "TÊN TICKET")}</>}{sortHeader("assignee", "NGƯỜI TEST")}<th>TRẠNG THÁI</th><th>THIẾT BỊ ĐÃ TEST</th></tr></thead><tbody>{visible.map(ticket => <tr key={ticket.id}>
+        <section className="panel table-panel"><div className="table-scroll"><table className={"golive-table" + (manual ? " golive-manual-table" : "")}><thead><tr>{!manual && <>{sortHeader("issueKey", "MÃ")}{sortHeader("summary", "TÊN TICKET")}</>}{sortHeader("assignee", "NGƯỜI TEST")}<th>TRẠNG THÁI</th><th><span className="golive-phase-th"><Globe size={13} aria-hidden="true" /> PHASE WEB</span></th><th><span className="golive-phase-th"><Smartphone size={13} aria-hidden="true" /> PHASE APP</span></th></tr></thead><tbody>{visible.map(ticket => <tr key={ticket.id}>
           {!manual && <><td className="golive-key">{ticket.issueKey}</td>
           <td className="golive-summary">{ticket.summary || <span className="muted">(không có tên)</span>}</td></>}
           <td className="golive-assignee">{ticket.assignee ? <HolderIdentity name={ticket.assignee} avatar={people.find(person => person.userId === ticket.assigneeUserId)?.avatar || ""} role={people.find(person => person.userId === ticket.assigneeUserId)?.role} /> : <span className="muted">Chưa có người test</span>}</td>
           <td className="golive-ticket-status"><span className={statusClass(statusOf(ticket))}>{statusOf(ticket)}</span></td>
-          <td className="golive-devices">{ticket.skippedAt && ticket.skipKind !== "tested" ? skipBadge(ticket) : <>{ticket.skippedAt && skipBadge(ticket)}{!ticket.assignee ? <span className="muted">Chưa có người test</span> : !ticket.assigneeUserId ? <span className="muted">“{ticket.assignee}” chưa khớp tài khoản nào</span> : (() => {
+          <td className={"golive-web-cell" + (appPhase ? " golive-phase-locked" : "")}>{webCell(ticket)}</td>
+          <td className={"golive-devices" + (appPhase ? "" : " golive-phase-locked")}>{!appPhase ? <span className="golive-phase-lock"><Lock size={13} aria-hidden="true" /> Chưa mở · mở khi tất cả QE xác nhận xong test web{checks.some(item => item.ticketId === ticket.id) && <small>Đã tích {checks.filter(item => item.ticketId === ticket.id).length} thiết bị trước đó</small>}</span>
+            : <div className="golive-phase-body">{ticket.skippedAt && ticket.skipKind !== "tested" ? skipBadge(ticket) : <>{ticket.skippedAt && skipBadge(ticket)}{!ticket.assignee ? <span className="muted">Chưa có người test</span> : !ticket.assigneeUserId ? <span className="muted">“{ticket.assignee}” chưa khớp tài khoản nào</span> : (() => {
             const list = ticketDevices(ticket), mine = ticket.assigneeUserId === currentUserId && !current?.completedAt && !(ticket.skippedAt && ticket.skipKind !== "tested");
             if (list.length === 0) return <span className="muted">Người test chưa cầm thiết bị nào</span>;
             return <div className="golive-device-group">
@@ -400,13 +462,13 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
             <button type="button" className="text-button golive-skip-button" disabled={busy} onClick={() => void setSkipped(ticket, true)}><Ban size={14} /> Không cần test</button>
             <button type="button" className="text-button golive-skip-button" disabled={busy} onClick={() => setCannotTest({ ticket, editing: false })}><CircleSlash size={14} /> Không test được</button>
             {!ticket.failedAt && <button type="button" className="text-button golive-skip-button golive-fail-button" disabled={busy} onClick={() => setFailing({ ticket, editing: false })}><XCircle size={14} /> Test failed</button>}
-          </div>}</>}</td>
+          </div>}</>}</div>}</td>
         </tr>)}</tbody></table>{visible.length === 0 && <p className="empty">Không có {rowLabel} phù hợp.</p>}</div></section>
       </>}
       </>}
     {confirmDialog}
-    {failing && <TestFailedDialog key={failing.ticket.id} issueKey={failing.ticket.issueKey} editing={failing.editing} initialReason={failing.editing ? failing.ticket.failedReason || "" : ""} busy={busy} onCancel={() => setFailing(null)} onSubmit={reason => void markFailed(reason)} />}
-    {cannotTest && <CannotTestDialog key={cannotTest.ticket.id} issueKey={cannotTest.ticket.issueKey} editing={cannotTest.editing} initialReason={cannotTest.editing ? cannotTest.ticket.skipReason || undefined : undefined} initialNotified={cannotTest.editing && !!cannotTest.ticket.skipNotified} busy={busy} onCancel={() => setCannotTest(null)} onSubmit={(reason, notified) => void markCannotTest(reason, notified)} />}
+    {failing && <TestFailedDialog key={failing.ticket.id} issueKey={failing.ticket.issueKey} editing={failing.editing} initialReason={failing.editing ? (failing.phase === "web" ? failing.ticket.webReason : failing.ticket.failedReason) || "" : ""} busy={busy} onCancel={() => setFailing(null)} onSubmit={reason => void markFailed(reason)} />}
+    {cannotTest && <CannotTestDialog key={cannotTest.ticket.id} issueKey={cannotTest.ticket.issueKey} editing={cannotTest.editing} initialReason={cannotTest.editing ? (cannotTest.phase === "web" ? cannotTest.ticket.webReason : cannotTest.ticket.skipReason) || undefined : undefined} initialNotified={cannotTest.editing && !!(cannotTest.phase === "web" ? cannotTest.ticket.webNotified : cannotTest.ticket.skipNotified)} busy={busy} onCancel={() => setCannotTest(null)} onSubmit={(reason, notified) => void markCannotTest(reason, notified)} />}
     {unfinished && <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setUnfinished(null); }} onKeyDown={e => { if (e.key === "Escape") setUnfinished(null); }}><div className="modal golive-warning" role="alertdialog" aria-modal="true" aria-labelledby="golive-warning-title">
       <div className="modal-head"><div className="golive-warning-head"><AlertTriangle size={22} /><div><h2 id="golive-warning-title">Chưa thể hoàn thành đợt golive</h2><p>Còn {unfinished.length} {rowLabel} chưa Done. Người test cần tích đủ các thiết bị đang cầm.</p></div></div><button className="icon-button" onClick={() => setUnfinished(null)} aria-label="Đóng"><X size={21} /></button></div>
       <div className="golive-warning-list"><table><thead><tr>{!manual && <><th>MÃ</th><th>TÊN TICKET</th></>}<th>NGƯỜI TEST</th></tr></thead><tbody>{unfinished.map(item => <tr key={item.issueKey}>{!manual && <><td className="golive-key">{item.issueKey}</td><td>{item.summary}</td></>}<td>{item.assignee || <span className="muted">Chưa có người test</span>}</td></tr>)}</tbody></table></div>

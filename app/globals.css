@@ -569,9 +569,14 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
   .table-panel .golive-table .golive-summary { grid-column: 1 / -1; grid-row: 2; font-size: 15px; line-height: 1.55; }
   .table-panel .golive-table .golive-assignee { grid-column: 1 / -1; grid-row: 3; }
   .table-panel .golive-table .golive-ticket-status { grid-column: 2; grid-row: 1; align-self: center; justify-self: end; }
-  .table-panel .golive-table .golive-devices { grid-column: 1 / -1; grid-row: 4; padding-top: 12px; border-top: 1px solid var(--line); }
+  .table-panel .golive-table .golive-web-cell { grid-column: 1 / -1; grid-row: 4; padding-top: 12px; border-top: 1px solid var(--line); }
+  .table-panel .golive-table .golive-web-cell::before, .table-panel .golive-table .golive-devices::before { display: block; margin-bottom: 6px; font-size: 10px; font-weight: 650; letter-spacing: .06em; color: var(--muted); }
+  .table-panel .golive-table .golive-web-cell::before { content: "PHASE WEB"; }
+  .table-panel .golive-table .golive-devices::before { content: "PHASE APP"; }
+  .table-panel .golive-table .golive-devices { grid-column: 1 / -1; grid-row: 5; padding-top: 12px; border-top: 1px solid var(--line); }
   .table-panel .golive-manual-table .golive-assignee { grid-column: 1; grid-row: 1; }
-  .table-panel .golive-manual-table .golive-devices { grid-row: 2; }
+  .table-panel .golive-manual-table .golive-web-cell { grid-row: 2; }
+  .table-panel .golive-manual-table .golive-devices { grid-row: 3; }
   .golive-table .holder-identity { font-size: 14px; }
   .golive-table .golive-device-group { min-width: 0; max-width: none; width: 100%; }
   .golive-table .golive-devices .muted { font-size: 13px; overflow-wrap: anywhere; }
@@ -582,6 +587,14 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 .golive-completed { display: inline-flex; align-items: center; gap: 7px; margin-left: auto; padding: 8px 12px; border-radius: 10px; background: #e9f5ee; color: #28715d; font-size: 13px; font-weight: 600; }
 .golive-skipped-failed { border-color: #e7c2c6; background: #fdf3f4; }
 .golive-skipped-failed .golive-skipped-label strong { color: #a3333d; }
+/* Phase web and phase app columns: the phase not in progress is shown but locked. */
+.golive-phase-th { display: inline-flex; align-items: center; gap: 5px; }
+.table-panel .golive-table td.golive-web-cell { min-width: 200px; text-align: left; }
+.golive-web-cell .muted { font-size: 12px; }
+.golive-web-outcome { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #28715d; }
+.golive-web-cell.golive-phase-locked > * { opacity: .6; }
+.golive-phase-lock { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; max-width: 220px; padding: 8px 10px; border: 1px dashed var(--line); border-radius: 10px; font-size: 12px; line-height: 1.4; color: var(--muted); }
+.golive-phase-lock small { flex-basis: 100%; }
 .golive-fail-hint { font-style: italic; }
 .golive-fail-button { color: #a3333d; }
 .golive-fail-button:hover { color: #86202a; }
@@ -828,6 +841,9 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 .stat-web.is-open { padding-bottom: 8px; }
 .stat-phase-title { display: inline-flex; align-items: center; gap: 6px; }
 .stat-web-note { margin: 10px 0 6px; font-size: 13px; color: var(--muted); }
+.stat-sub-label { margin: 14px 0 0; font-size: 10px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.stat-web-status { min-width: 150px; }
+.stat-web-status .status-chip { justify-self: start; }
 .stat-web-done { display: flex; align-items: center; gap: 8px; margin: 10px 0 4px; font-size: 13px; font-weight: 600; color: #28715d; }
 .stat-web-pending { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin: 10px 0 4px; font-size: 13px; color: var(--muted); }
 .stat-web-pending strong { color: #a3333d; font-variant-numeric: tabular-nums; }
@@ -852,6 +868,8 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
   .stat-release-phases { flex: 1 1 100%; order: 3; }
   .stat-web { padding: 12px 16px; }
   .stat-web .table-scroll { overflow-x: auto; }
+  .stat-web .stat-tester-table { min-width: 480px; }
+  .stat-web .stat-tester-table thead { display: table-header-group; }
   .stat-web-table { min-width: 420px; }
   .stat-web-table thead { display: table-header-group; }
   .stat-phase-head { padding: 14px 16px 2px; }
@@ -880,7 +898,11 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
   .stat-table .golive-ticket-status { grid-column: 3; grid-row: 1; align-self: center; justify-self: end; }
   .stat-table .golive-summary { grid-column: 1 / -1; grid-row: 2; font-size: 15px; line-height: 1.55; }
   .stat-table .golive-assignee { grid-column: 1 / -1; grid-row: 3; }
-  .stat-table .stat-done-at { grid-column: 1 / -1; grid-row: 4; min-width: 0; padding-top: 10px; border-top: 1px solid var(--line); }
+  .stat-table .stat-web-status { grid-column: 1 / -1; grid-row: 4; min-width: 0; padding-top: 10px; border-top: 1px solid var(--line); }
+  .stat-table .stat-web-status::before, .stat-table .stat-done-at::before { display: block; margin-bottom: 5px; font-size: 10px; font-weight: 650; letter-spacing: .06em; color: var(--muted); }
+  .stat-table .stat-web-status::before { content: "PHASE WEB"; }
+  .stat-table .stat-done-at::before { content: "PHASE APP"; }
+  .stat-table .stat-done-at { grid-column: 1 / -1; grid-row: 5; min-width: 0; padding-top: 10px; border-top: 1px solid var(--line); }
   /* A manual golive has no ticket key, so the tester name takes the first row. */
   .stat-table tbody tr:not(:has(.golive-key)) .golive-assignee { grid-column: 2; grid-row: 1; align-self: center; }
   .stat-table .stat-pick input { width: 22px; height: 22px; }
@@ -1142,3 +1164,5 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 :root[data-theme="dark"] .stat-phase-completed { background: #2e4638; color: #bae6da; }
 :root[data-theme="dark"] .stat-web-done { color: #9fdcc5; }
 :root[data-theme="dark"] .stat-web-pending strong { color: #e5abb0; }
+:root[data-theme="dark"] .golive-web-outcome { color: #9fdcc5; }
+.stat-table .status-chip { white-space: nowrap; }

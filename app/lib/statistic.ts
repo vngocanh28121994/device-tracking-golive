@@ -104,3 +104,26 @@ export function webSummary(qeIds: string[], signedIds: string[]): WebSummary {
 export type GolivePhase = "web" | "app" | "completed";
 export const phaseOf = (release: { completedAt: string | null; web: WebSummary }): GolivePhase =>
   release.completedAt ? "completed" : release.web.done ? "app" : "web";
+
+// Phase web per tester: the same four outcomes the app phase has, picked directly on each ticket.
+export type WebKind = "tested" | "notNeeded" | "cannotTest" | "failed" | "open";
+export const webKindOf = (status: string | null | undefined): WebKind =>
+  status === "tested" ? "tested" : status === "not-needed" ? "notNeeded" : status === "cannot-test" ? "cannotTest" : status === "failed" ? "failed" : "open";
+// done counts the three settled outcomes; failed and open are still outstanding for the web.
+export type WebTally = { name: string; userId: string | null; done: number; total: number } & Record<WebKind, number>;
+
+export function tallyWebByTester(tickets: { assignee: string; assigneeUserId: string | null; webStatus: string | null }[]): WebTally[] {
+  const groups = new Map<string, WebTally>();
+  for (const ticket of tickets) {
+    const name = ticket.assignee.trim();
+    const entry = groups.get(name) || { name, userId: ticket.assigneeUserId, done: 0, total: 0, tested: 0, notNeeded: 0, cannotTest: 0, failed: 0, open: 0 };
+    const kind = webKindOf(ticket.webStatus);
+    entry.total++;
+    entry[kind]++;
+    if (kind !== "failed" && kind !== "open") entry.done++;
+    entry.userId = entry.userId ?? ticket.assigneeUserId;
+    groups.set(name, entry);
+  }
+  return [...groups.values()].sort((a, b) =>
+    (a.name ? 0 : 1) - (b.name ? 0 : 1) || (b.open + b.failed) - (a.open + a.failed) || a.name.localeCompare(b.name, "vi"));
+}

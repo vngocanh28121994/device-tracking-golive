@@ -60,3 +60,13 @@ export function releaseNameFromCsv(text: string): string {
   if (index < 0) return "";
   return rows.map(cells => (cells[index] || "").trim()).find(Boolean) || "";
 }
+
+// Phase 1 of a golive tests the web build; phase 2 tests the app on devices. Each ticket records one
+// of the same four outcomes in each phase. In the web phase the tester picks it directly.
+export const WEB_STATUSES = ["tested", "not-needed", "cannot-test", "failed"] as const;
+export type WebStatus = typeof WEB_STATUSES[number];
+export const isWebStatus = (value: unknown): value is WebStatus => WEB_STATUSES.some(status => status === value);
+// A failed web test still needs work, like an untested one; the other three settle the ticket for the web.
+export const webSettled = (status: string | null | undefined) => !!status && status !== "failed";
+// The release is in the app phase once every QE confirmed the web test (and stays there once completed).
+export const inAppPhase = (qeIds: string[], signedIds: string[]) => qeIds.length > 0 && qeIds.every(id => signedIds.includes(id));
