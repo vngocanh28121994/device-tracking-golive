@@ -250,7 +250,7 @@ export function StatisticBoard({ people, currentUserId, onToast, onError }: { pe
                                 {parts.map(part => <span key={part.kind} className={"stat-legend stat-legend-" + part.cls}>{tester[part.kind]} {part.short}</span>)}
                               </span>
                             </td>
-                            <td className="stat-tester-open"><strong className={tester.open + tester.failed > 0 ? "stat-count" : ""}
+                            <td className="stat-tester-open" data-label="chưa xong web"><strong className={tester.open + tester.failed > 0 ? "stat-count" : ""}
                               onMouseEnter={tester.open + tester.failed > 0 ? (event => showTip(event, tester, tester.open + tester.failed + " ticket chưa xong web", item => mine(item) && ["open", "failed"].includes(webKindOf(item.webStatus)))) : undefined}
                               onMouseLeave={() => setTip(null)}>{tester.open + tester.failed}</strong></td>
                           </tr>;
@@ -306,7 +306,7 @@ export function StatisticBoard({ people, currentUserId, onToast, onError }: { pe
                           {parts.map(part => <span key={part.kind} className={"stat-legend stat-legend-" + part.kind}>{tester[part.kind]} {part.short}</span>)}
                         </span>
                       </td>
-                      <td className="stat-tester-open"><strong className={tester.open > 0 ? "stat-count" : ""}
+                      <td className="stat-tester-open" data-label="chưa test"><strong className={tester.open > 0 ? "stat-count" : ""}
                         onMouseEnter={tester.open > 0 ? (event => showTip(event, tester, tester.open + " ticket chưa test", item => !item.doneAt)) : undefined}
                         onMouseLeave={() => setTip(null)}>{tester.open}</strong></td>
                     </tr>;

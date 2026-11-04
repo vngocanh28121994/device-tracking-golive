@@ -897,8 +897,6 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
   .stat-release-phases { flex: 1 1 100%; order: 3; }
   .stat-web { padding: 12px 16px; }
   .stat-web .table-scroll { overflow-x: auto; }
-  .stat-web .stat-tester-table { min-width: 480px; }
-  .stat-web .stat-tester-table thead { display: table-header-group; }
   .stat-web-table { min-width: 420px; }
   .stat-web-table thead { display: table-header-group; }
   .stat-phase-head { padding: 14px 16px 2px; }
@@ -914,11 +912,23 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
   /* Only the ticket table stacks into cards; the per-tester table keeps scrolling sideways,
      against the blanket .table-scroll override phones apply to every other table. */
   .stat-details .table-scroll { overflow: visible; }
-  .stat-testers .table-scroll { overflow-x: auto; }
-  /* The column headers are what make these numbers read as ticket counts, so they stay on phones
-     too, against the blanket thead/min-width overrides above. */
-  .stat-tester-table { min-width: 480px; }
-  .stat-tester-table thead { display: table-header-group; }
+  /* Per-tester summary on phones: one block per tester, no sideways scroll. Name and outstanding
+     count share the first line (the count keeps its column header as a label), then a slim bar
+     across the full width, then its legend. */
+  .stat-testers .table-scroll, .stat-web .table-scroll:has(.stat-tester-table) { overflow: visible; }
+  .stat-tester-table { display: block; min-width: 0; width: 100%; }
+  .stat-tester-table thead { display: none; }
+  .stat-tester-table tbody { display: block; }
+  .stat-tester-table tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .stat-tester-table tr:last-child { border-bottom: 0; }
+  .stat-tester-table td, .stat-tester-table th:last-child, .stat-tester-table td:last-child { display: block; width: auto; min-width: 0; padding: 0; border: 0; }
+  .stat-tester-table .golive-assignee { grid-column: 1; grid-row: 1; min-width: 0; }
+  .stat-tester-table td.stat-tester-open.stat-tester-open { grid-column: 2; grid-row: 1; display: inline-flex; align-items: baseline; gap: 6px; }
+  .stat-tester-table .stat-tester-open::before { content: attr(data-label); font-size: 11px; color: var(--muted); }
+  .stat-tester-table .stat-tester-done { grid-column: 1 / -1; grid-row: 2; }
+  .stat-tester-table .stat-stack { height: 6px; }
+  .stat-tester-table .stat-stack-counts { margin-top: 6px; gap: 2px 10px; }
+  .stat-tester-table .stat-stack-counts strong { font-size: 14px; }
   .stat-table tbody { display: grid; gap: 10px; padding: 12px; }
   .stat-table tbody tr { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
   .stat-table td { display: block; border: 0; padding: 0; text-align: left; width: auto; }
