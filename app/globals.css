@@ -467,14 +467,14 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 .status-failed { color: #a3333d; background: #fbe9ea; }
 .golive-table td { vertical-align: middle; }
 .golive-key { font-weight: 650; white-space: nowrap; color: var(--accent); font-size: 13px; }
-.golive-summary { font-size: 14px; min-width: 240px; overflow-wrap: anywhere; }
+.golive-summary { font-size: 14px; min-width: 190px; overflow-wrap: anywhere; }
 .golive-file { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
 .golive-preview { list-style: none; margin: 4px 0 18px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; font-size: 13px; display: grid; gap: 6px; max-height: 180px; overflow: auto; }
 .golive-preview strong { color: var(--accent); margin-right: 6px; }
 .muted { color: var(--muted); }
 .golive-mine { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted); cursor: pointer; }
 .golive-mine input { accent-color: var(--accent); width: 16px; height: 16px; }
-.table-panel .golive-table td.golive-devices { min-width: 260px; text-align: left; }
+.table-panel .golive-table td.golive-devices { min-width: 230px; text-align: left; }
 .golive-devices .muted { font-size: 12px; }
 .golive-device-group { min-width: 220px; max-width: 320px; text-align: left; }
 .golive-device-count { margin-bottom: 7px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -595,6 +595,27 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
   .golive-table .holder-identity { font-size: 14px; }
   .golive-table .golive-device-group { min-width: 0; max-width: none; width: 100%; }
   .golive-table .golive-devices .muted { font-size: 13px; overflow-wrap: anywhere; }
+  /* Compact ticket cards, as on Statistic: the checkbox sits in the corner beside the key instead of
+     indenting the whole card, no rules between sections, and the phase that is not running folds
+     into one short tile, so the phase being worked on keeps the room. */
+  .table-panel .golive-table tbody { gap: 10px; }
+  .table-panel .golive-table tbody tr, .table-panel .golive-table tbody tr:has(td.golive-pick) { gap: 8px; padding: 12px; }
+  .table-panel .golive-table td.golive-pick { top: 13px; left: 12px; }
+  .table-panel .golive-table td.golive-pick input { width: 20px; height: 20px; }
+  .table-panel .golive-table tr:has(td.golive-pick) .golive-key { padding-left: 30px; }
+  .table-panel .golive-table .golive-summary { font-size: 14px; line-height: 1.45; }
+  .golive-table .holder-identity { font-size: 13px; }
+  .table-panel .golive-table .golive-web-cell, .table-panel .golive-table .golive-devices { margin-top: 2px; padding-top: 0; border-top: 0; }
+  .table-panel .golive-table td.golive-phase-locked { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 8px 10px; border-radius: 10px; background: var(--canvas); }
+  .table-panel .golive-table td.golive-phase-locked::before { margin-bottom: 0; }
+  .table-panel .golive-table tr:has(.golive-checklist.complete) td.golive-phase-locked { background: var(--surface); }
+  body .table-panel .golive-table td.golive-phase-locked .golive-phase-lock { flex: 1 1 0; min-width: 0; width: auto; padding: 0; border: 0; font-size: 12px; }
+  .table-panel .golive-table td.golive-web-cell.golive-phase-locked > * { flex: 1 1 0; min-width: 0; }
+  .table-panel .golive-table td.golive-phase-locked .golive-skipped { flex-direction: row; align-items: center; padding: 0; border: 0; background: none; margin: 0; }
+  .table-panel .golive-table td.golive-phase-locked .golive-skipped-label small { display: none; }
+  .table-panel .golive-table td.golive-phase-locked .golive-skipped-label strong { font-size: 13px; }
+  .table-panel .golive-table td.golive-phase-locked .golive-skip-reason { font-size: 12px; }
+  :root[data-theme="dark"] .table-panel .golive-table td { border-top: 0; }
   .golive-checklist label { min-height: 56px; }
 }
 .golive-complete { display: inline-flex; align-items: center; gap: 7px; margin-left: auto; }
@@ -619,6 +640,7 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 .golive-web-cell.golive-phase-locked > * { opacity: .6; }
 /* Icon on the left, the copy on its right; the copy wraps inside its own column, never under the icon. */
 .table-panel .golive-table td.golive-devices.golive-phase-locked { min-width: 170px; }
+.table-panel .golive-table td.golive-web-cell.golive-phase-locked { min-width: 150px; }
 .golive-phase-lock { display: flex; align-items: flex-start; gap: 8px; box-sizing: border-box; max-width: 220px; padding: 9px 11px; border: 1px dashed var(--line); border-radius: 10px; font-size: 12px; line-height: 1.45; color: var(--muted); }
 .golive-phase-lock > svg { flex: none; margin-top: 1px; }
 .golive-phase-lock-text { display: grid; gap: 2px; min-width: 0; }
