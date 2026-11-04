@@ -1301,6 +1301,7 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
   body .stat-section-toggle small, body .stat-phase-head small { font-size: 13px; font-weight: 400; }
   body .stat-web-done { font-size: 14px; font-weight: 500; }
   body .stat-web-pending, body .stat-web-note, body .stat-selection { font-size: 14px; }
+  body .stat-web-pending .outline-button { width: 100%; min-height: 44px; justify-content: center; }
   body .stat-tester-table .stat-stack-counts { font-size: 13px; }
   body .stat-tester-table .stat-stack-counts strong { font-size: 16px; font-weight: 600; }
   body .stat-tester-table td.stat-tester-open.stat-tester-open::before { font-size: 13px; }
