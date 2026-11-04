@@ -2,11 +2,11 @@ import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { waitUntil } from "cloudflare:workers";
 import { requireMember } from "../../lib/member-access";
 import { getDb } from "../../../db";
-import { goliveDeviceChecks, goliveReleases, goliveTickets, userProfiles } from "../../../db/schema";
+import { goliveDeviceChecks, goliveReleases, goliveTickets, goliveWebSignoffs, userProfiles } from "../../../db/schema";
 import { canViewStatistic } from "../../lib/roles";
 import { matchAccount } from "../../lib/golive";
 import { notifyUsers, pushEnabled } from "../../lib/push";
-import { untestedNotices } from "../../lib/statistic";
+import { untestedNotices, webRoster, webSummary } from "../../lib/statistic";
 
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { "Cache-Control": "private, no-store" } });
 
@@ -29,8 +29,8 @@ export async function GET(request: Request) {
   try {
     const releaseId = new URL(request.url).searchParams.get("release") || "";
     if (releaseId) {
-      // One round trip each: the tickets, and how many devices each one has ticked so far.
-      const [rows, ticks, profiles] = await Promise.all([
+      // One round trip each: the tickets, how many devices each one has ticked so far, and the web sign-offs.
+      const [rows, ticks, profiles, signoffs] = await Promise.all([
         db.select().from(goliveTickets).where(eq(goliveTickets.releaseId, releaseId)).orderBy(goliveTickets.id),
         db.select({
           ticketId: goliveDeviceChecks.ticketId,
@@ -40,8 +40,10 @@ export async function GET(request: Request) {
         }).from(goliveDeviceChecks)
           .where(sql`${goliveDeviceChecks.ticketId} in (select ${goliveTickets.id} from ${goliveTickets} where ${goliveTickets.releaseId} = ${releaseId})`)
           .groupBy(goliveDeviceChecks.ticketId),
-        db.select({ userId: userProfiles.userId, displayName: userProfiles.displayName }).from(userProfiles),
+        db.select({ userId: userProfiles.userId, displayName: userProfiles.displayName, role: userProfiles.role }).from(userProfiles),
+        db.select({ userId: goliveWebSignoffs.userId, signedAt: goliveWebSignoffs.signedAt }).from(goliveWebSignoffs).where(eq(goliveWebSignoffs.releaseId, releaseId)),
       ]);
+      const web = webRoster(profiles.filter(person => person.role === "QE"), signoffs);
       const tickets = rows.map(ticket => {
         const tick = ticks.find(item => item.ticketId === ticket.id);
         return {
@@ -53,9 +55,9 @@ export async function GET(request: Request) {
           testedDevices: tick?.devices ?? 0, lastCheckedAt: tick?.lastCheckedAt ?? null,
         };
       });
-      return json({ releaseId, tickets });
+      return json({ releaseId, tickets, web });
     }
-    const [rows, counts] = await Promise.all([
+    const [rows, counts, qe, signoffs] = await Promise.all([
       db.select().from(goliveReleases).orderBy(desc(goliveReleases.createdAt)),
       db.select({
         releaseId: goliveTickets.releaseId,
@@ -63,10 +65,14 @@ export async function GET(request: Request) {
         done: sql<number>`sum(case when ${goliveTickets.doneAt} is null then 0 else 1 end)`,
         failed: sql<number>`sum(case when ${goliveTickets.failedAt} is null then 0 else 1 end)`,
       }).from(goliveTickets).groupBy(goliveTickets.releaseId),
+      db.select({ userId: userProfiles.userId }).from(userProfiles).where(eq(userProfiles.role, "QE")),
+      db.select({ releaseId: goliveWebSignoffs.releaseId, userId: goliveWebSignoffs.userId }).from(goliveWebSignoffs),
     ]);
+    const qeIds = qe.map(person => person.userId);
     const releases = rows.map(release => {
       const count = counts.find(item => item.releaseId === release.id);
-      return { ...release, total: count?.total ?? 0, done: Number(count?.done ?? 0), failed: Number(count?.failed ?? 0) };
+      const web = webSummary(qeIds, signoffs.filter(row => row.releaseId === release.id).map(row => row.userId));
+      return { ...release, total: count?.total ?? 0, done: Number(count?.done ?? 0), failed: Number(count?.failed ?? 0), web };
     });
     return json({ releases });
   } catch {

@@ -816,6 +816,29 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 .stat-done-stamp small { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
 .stat-fail-reason { margin-top: 3px; color: #a3333d; }
 .stat-release-body .empty { padding: 28px 20px; }
+/* The two golive phases, as on the Tracking Golive board: web sign-off by every QE, then the app on devices. */
+.stat-phase-chip { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.stat-phase-web { background: var(--lavender); color: var(--accent); }
+.stat-phase-app { background: #fff3e2; color: #8a5a17; }
+.stat-phase-completed { background: #e9f5ee; color: #28715d; }
+.stat-release-phases { flex: 0 0 170px; display: grid; gap: 8px; }
+.stat-release-phases .stat-release-progress { flex: none; gap: 4px; justify-items: stretch; }
+.stat-release-phases .stat-release-progress small { display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px; }
+.stat-web { padding: 12px 18px; border-bottom: 1px solid var(--line); }
+.stat-web.is-open { padding-bottom: 8px; }
+.stat-phase-title { display: inline-flex; align-items: center; gap: 6px; }
+.stat-web-note { margin: 10px 0 6px; font-size: 13px; color: var(--muted); }
+.stat-web-done { display: flex; align-items: center; gap: 8px; margin: 10px 0 4px; font-size: 13px; font-weight: 600; color: #28715d; }
+.stat-web-pending { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin: 10px 0 4px; font-size: 13px; color: var(--muted); }
+.stat-web-pending strong { color: #a3333d; font-variant-numeric: tabular-nums; }
+.stat-web-table { min-width: 420px; }
+.stat-web-table th { padding: 12px 16px; background: none; }
+.stat-web-table td { padding: 10px 16px; vertical-align: middle; }
+.stat-web-table th:last-child, .stat-web-table td:last-child { text-align: left; width: auto; }
+.stat-web-table .stat-done-at strong { font-size: 13px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.stat-web-table .stat-done-at .muted { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; }
+.stat-phase-head { display: flex; align-items: center; gap: 6px; padding: 14px 18px 2px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
+.stat-phase-head small { margin-left: auto; font-size: 11px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--muted); }
 @media (max-width: 900px) {
   /* Three lines of copy per card, so these stay stacked where a golive stat goes side by side. */
   .stat-summary .golive-stat { flex-direction: column; align-items: flex-start; justify-content: flex-start; }
@@ -825,6 +848,13 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
   .stat-chevron { order: 0; margin-left: auto; }
   .stat-release-progress { flex: 1 1 100%; order: 2; justify-items: stretch; }
   .stat-release-progress small { text-align: right; }
+  .stat-phase-chip { order: 2; }
+  .stat-release-phases { flex: 1 1 100%; order: 3; }
+  .stat-web { padding: 12px 16px; }
+  .stat-web .table-scroll { overflow-x: auto; }
+  .stat-web-table { min-width: 420px; }
+  .stat-web-table thead { display: table-header-group; }
+  .stat-phase-head { padding: 14px 16px 2px; }
   .stat-testers { padding-bottom: 14px; }
   .stat-details > .stat-section-toggle { padding: 12px 16px; }
   .stat-notify { padding: 14px 16px; }
@@ -1108,3 +1138,7 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 :root[data-theme="dark"] .golive-web-done-text small { color: #9fcbb9; }
 :root[data-theme="dark"] .golive-skip-notified { color: #f3c58f; background: #3a2a18; }
 :root[data-theme="dark"] .golive-skip-notified.is-notified { color: #bae6da; background: #2e4638; }
+:root[data-theme="dark"] .stat-phase-app { background: #3d2e1a; color: #f0c98d; }
+:root[data-theme="dark"] .stat-phase-completed { background: #2e4638; color: #bae6da; }
+:root[data-theme="dark"] .stat-web-done { color: #9fdcc5; }
+:root[data-theme="dark"] .stat-web-pending strong { color: #e5abb0; }

@@ -1,11 +1,11 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Ban, Bell, CheckCircle2, ChevronDown, ListChecks, Rocket, X } from "lucide-react";
+import { Ban, Bell, CheckCircle2, ChevronDown, Clock, Globe, ListChecks, Rocket, Smartphone, X } from "lucide-react";
 import { HolderIdentity } from "./HolderIdentity";
 import { LoadingState } from "./LoadingState";
-import { doneKindOf, markedAt, markedBy, markedHow, tallyByTester, TesterTally } from "../lib/statistic";
+import { doneKindOf, markedAt, markedBy, markedHow, phaseOf, tallyByTester, TesterTally, WebQe, WebSummary } from "../lib/statistic";
 
-type Release = { id: string; name: string; source: string; fixVersion: string; createdBy: string; createdAt: string; completedAt: string | null; completedBy: string | null; total: number; done: number; failed: number };
+type Release = { id: string; name: string; source: string; fixVersion: string; createdBy: string; createdAt: string; completedAt: string | null; completedBy: string | null; total: number; done: number; failed: number; web: WebSummary };
 type Ticket = { id: number; issueKey: string; summary: string; assignee: string; assigneeUserId: string | null; doneAt: string | null; skippedAt: string | null; skippedBy: string | null; skipKind: string; testedDevices: number; lastCheckedAt: string | null; failedAt: string | null; failedBy: string | null; failedReason: string };
 type Person = { userId: string; displayName: string; avatar: string; role?: string };
 // The hovered slice of a tester's bar, with the very tickets it stands for.
@@ -32,8 +32,11 @@ const BAR_PARTS = [
   { kind: "failed", short: "test failed", label: "ticket test failed" },
   { kind: "open", short: "chưa test", label: "ticket chưa test" },
 ] as const;
+// The same two phases as the Tracking Golive board: QE confirm the web build, then test the app on devices.
+const PHASE_LABEL = { web: "Giai đoạn 1 · Test web", app: "Giai đoạn 2 · Test app", completed: "Hoàn thành" } as const;
+const NO_WEB: WebSummary = { total: 0, signed: 0, done: false };
 
-export function StatisticBoard({ people, onToast, onError }: { people: Person[]; onToast: (message: string) => void; onError: (message: string) => void }) {
+export function StatisticBoard({ people, currentUserId, onToast, onError }: { people: Person[]; currentUserId: string; onToast: (message: string) => void; onError: (message: string) => void }) {
   const [releases, setReleases] = useState<Release[] | null>(null), [error, setError] = useState("");
   const [open, setOpen] = useState<string[]>([]);
   const [ticketsByRelease, setTicketsByRelease] = useState<Record<string, Ticket[]>>({});
@@ -41,6 +44,9 @@ export function StatisticBoard({ people, onToast, onError }: { people: Person[];
   const [selected, setSelected] = useState<Record<string, number[]>>({});
   const [collapsedTesters, setCollapsedTesters] = useState<string[]>([]);
   const [collapsedDetails, setCollapsedDetails] = useState<string[]>([]);
+  const [collapsedWeb, setCollapsedWeb] = useState<string[]>([]);
+  const [webByRelease, setWebByRelease] = useState<Record<string, WebQe[]>>({});
+  const isManager = people.find(person => person.userId === currentUserId)?.role === "Manager";
   const [tip, setTip] = useState<Tip | null>(null);
   const [sending, setSending] = useState("");
 
@@ -61,6 +67,18 @@ export function StatisticBoard({ people, onToast, onError }: { people: Person[];
     finally { setSending(""); }
   }
 
+  // Same reminder as the Tracking Golive board: a push to every QE who has not confirmed the web test.
+  async function remindWeb(releaseId: string) {
+    setSending("web:" + releaseId);
+    try {
+      const r = await fetch("/api/golive", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "remind-web", releaseId }) });
+      const data = await r.json() as { pending?: number; error?: string };
+      if (!r.ok) throw new Error(data.error || "Không thể gửi nhắc nhở.");
+      onToast("Đã gửi nhắc nhở tới " + data.pending + " QE chưa xác nhận test web 🔔");
+    } catch (e) { onError(e instanceof Error ? e.message : "Không thể gửi nhắc nhở."); }
+    finally { setSending(""); }
+  }
+
   useEffect(() => { try { const raw = localStorage.getItem(SELECTION_KEY); if (raw) setSelected(JSON.parse(raw) as Record<string, number[]>); } catch { /* a corrupt note just starts empty */ } }, []);
   const writeSelected = useCallback((next: Record<string, number[]>) => {
     setSelected(next);
@@ -72,9 +90,10 @@ export function StatisticBoard({ people, onToast, onError }: { people: Person[];
     setReleaseError(current => ({ ...current, [id]: "" }));
     try {
       const r = await fetch("/api/statistic?release=" + encodeURIComponent(id), { cache: "no-store" });
-      const data = await r.json() as { tickets?: Ticket[]; error?: string };
+      const data = await r.json() as { tickets?: Ticket[]; web?: WebQe[]; error?: string };
       if (!r.ok) throw new Error(data.error || "Không thể tải ticket của đợt golive.");
       setTicketsByRelease(current => ({ ...current, [id]: data.tickets || [] }));
+      setWebByRelease(current => ({ ...current, [id]: data.web || [] }));
     } catch (e) {
       setReleaseError(current => ({ ...current, [id]: e instanceof Error ? e.message : "Không thể tải ticket của đợt golive." }));
     } finally { setLoadingRelease(current => current.filter(item => item !== id)); }
@@ -86,7 +105,7 @@ export function StatisticBoard({ people, onToast, onError }: { people: Person[];
       const r = await fetch("/api/statistic", { cache: "no-store" });
       const data = await r.json() as { releases?: Release[]; error?: string };
       if (!r.ok) throw new Error(data.error || "Không thể tải số liệu golive.");
-      const list = data.releases || [];
+      const list = (data.releases || []).map(item => ({ ...item, web: item.web || NO_WEB }));
       setReleases(list);
       const first = list.find(item => !item.completedAt) || list[0];
       if (first) { setOpen([first.id]); void loadTickets(first.id); }
@@ -102,7 +121,8 @@ export function StatisticBoard({ people, onToast, onError }: { people: Person[];
     const list = releases || [];
     const done = list.reduce((sum, item) => sum + item.done, 0), total = list.reduce((sum, item) => sum + item.total, 0);
     const failed = list.reduce((sum, item) => sum + item.failed, 0);
-    return { releases: list.length, running: list.filter(item => !item.completedAt).length, done, failed, open: total - done - failed, total };
+    const running = list.filter(item => !item.completedAt);
+    return { releases: list.length, running: running.length, onWeb: running.filter(item => phaseOf(item) === "web").length, done, failed, open: total - done - failed, total };
   }, [releases]);
 
   if (error) return <>
@@ -115,10 +135,10 @@ export function StatisticBoard({ people, onToast, onError }: { people: Person[];
   </>;
 
   return <>
-    <div className="page-heading"><div><h1>Statistic.</h1><p>Mỗi đợt golive và trạng thái từng ticket trong đó. Ticket đã done ghi lại thời điểm QE đánh dấu; ticket chưa done có thể chọn để theo dõi riêng.</p></div></div>
+    <div className="page-heading"><div><h1>Statistic.</h1><p>Mỗi đợt golive đi qua 2 giai đoạn như màn Tracking Golive: giai đoạn 1 QE xác nhận test web, giai đoạn 2 test app trên thiết bị. Ticket đã done ghi lại thời điểm QE đánh dấu; ticket chưa done có thể chọn để theo dõi riêng.</p></div></div>
     {releases.length === 0 ? <section className="panel golive-empty"><Rocket size={34} /><h2>Chưa có đợt golive nào</h2><p>Tạo hoặc import một đợt golive ở màn Tracking Golive, số liệu sẽ hiện ở đây.</p></section> : <>
       <div className="golive-stats stat-summary">
-        <div className="golive-stat"><span className="status-chip">Đợt golive</span><strong>{totals.releases}</strong><small>{totals.running} đang thực hiện</small></div>
+        <div className="golive-stat"><span className="status-chip">Đợt golive</span><strong>{totals.releases}</strong><small>{totals.running} đang thực hiện{totals.running > 0 && " · " + totals.onWeb + " test web, " + (totals.running - totals.onWeb) + " test app"}</small></div>
         <div className="golive-stat"><span className="status-chip status-done">Done</span><strong>{totals.done}</strong><small>trên {totals.total} ticket</small></div>
         <div className="golive-stat"><span className="status-chip status-failed">Test failed</span><strong>{totals.failed}</strong><small>cần xử lý</small></div>
         <div className="golive-stat"><span className="status-chip status-blocked">Chưa test</span><strong>{totals.open}</strong><small>cần theo dõi</small></div>
@@ -132,6 +152,11 @@ export function StatisticBoard({ people, onToast, onError }: { people: Person[];
         const tally = tickets ? tallyByTester(tickets) : [];
         const testersOpen = !collapsedTesters.includes(release.id);
         const detailsOpen = !collapsedDetails.includes(release.id);
+        const webOpen = !collapsedWeb.includes(release.id);
+        const phase = phaseOf(release);
+        const roster = webByRelease[release.id] || [];
+        const webPending = roster.filter(person => !person.signedAt);
+        const webPercent = release.web.total ? Math.round(release.web.signed / release.web.total * 100) : 0;
         const toggle = (id: string, setter: typeof setCollapsedTesters) =>
           setter(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id]);
         // Anchored to whatever was hovered and kept clear of both window edges.
@@ -157,17 +182,59 @@ export function StatisticBoard({ people, onToast, onError }: { people: Person[];
               <small>{release.completedAt ? "Hoàn thành " + prettyStamp(release.completedAt) + (release.completedBy ? " · " + release.completedBy : "") : "Đang thực hiện · tạo " + prettyDate(release.createdAt) + " · " + release.createdBy}</small>
             </span>
             {release.fixVersion && <span className="golive-version">fixVersion: <strong>{release.fixVersion}</strong></span>}
-            <span className="stat-release-progress">
-              <span className="stat-bar"><span className={"stat-bar-fill" + (percent === 100 ? " full" : "")} style={{ width: percent + "%" }} /></span>
-              <small>{release.done}/{release.total} done</small>
+            <span className={"stat-phase-chip stat-phase-" + phase}>{phase === "web" ? <Globe size={13} /> : phase === "app" ? <Smartphone size={13} /> : <CheckCircle2 size={13} />} {PHASE_LABEL[phase]}</span>
+            <span className="stat-release-phases">
+              <span className="stat-release-progress" title="Giai đoạn 1 · Test web">
+                <small><Globe size={12} aria-hidden="true" /> Web · {release.web.total ? release.web.signed + "/" + release.web.total + " QE" : "chưa có QE"}</small>
+                <span className="stat-bar"><span className={"stat-bar-fill" + (release.web.done ? " full" : "")} style={{ width: webPercent + "%" }} /></span>
+              </span>
+              <span className="stat-release-progress" title="Giai đoạn 2 · Test app">
+                <small><Smartphone size={12} aria-hidden="true" /> App · {release.done}/{release.total} done</small>
+                <span className="stat-bar"><span className={"stat-bar-fill" + (percent === 100 ? " full" : "")} style={{ width: percent + "%" }} /></span>
+              </span>
             </span>
             <ChevronDown className="stat-chevron" size={18} aria-hidden="true" />
           </button>
           {expanded && <div className="stat-release-body">
             {releaseError[release.id] ? <p className="empty">{releaseError[release.id]}</p>
               : !tickets ? <LoadingState label={"Đang tải " + rowLabel + "..."} />
-              : tickets.length === 0 ? <p className="empty">Đợt golive này chưa có {rowLabel} nào.</p>
               : <>
+                <div className={"stat-web stat-section" + (webOpen ? " is-open" : "")}>
+                  <button type="button" className="stat-section-toggle" aria-expanded={webOpen} aria-controls={"stat-web-" + release.id}
+                    onClick={() => toggle(release.id, setCollapsedWeb)}>
+                    <span className="stat-phase-title"><Globe size={14} aria-hidden="true" /> Giai đoạn 1 · Test web</span>
+                    <small>{roster.length ? roster.length - webPending.length + "/" + roster.length + " QE đã xác nhận" : "Chưa có QE"}</small>
+                    <ChevronDown size={15} aria-hidden="true" />
+                  </button>
+                  {webOpen && <div id={"stat-web-" + release.id}>
+                    {roster.length === 0 ? <p className="stat-web-note">Chưa có tài khoản role QE nào để theo dõi test web.</p> : <>
+                      {webPending.length === 0
+                        ? <p className="stat-web-done" role="status"><CheckCircle2 size={16} aria-hidden="true" /> Tất cả QE đã xác nhận test web{phase === "app" ? ", đang test app ở giai đoạn 2." : "."}</p>
+                        : <div className="stat-web-pending">
+                          <span>Còn <strong>{webPending.length}</strong> QE chưa xác nhận test web{phase === "web" ? ", giai đoạn test app chưa bắt đầu." : "."}</span>
+                          {!release.completedAt && isManager && <button type="button" className="outline-button stat-clear" disabled={sending === "web:" + release.id}
+                            onClick={() => void remindWeb(release.id)}><Bell size={15} /> {sending === "web:" + release.id ? "Đang gửi..." : "Nhắc nhở"}</button>}
+                        </div>}
+                      <div className="table-scroll"><table className="stat-web-table"><thead><tr>
+                        <th>QE</th><th>TRẠNG THÁI</th><th>THỜI ĐIỂM XÁC NHẬN</th>
+                      </tr></thead><tbody>{roster.map(person => {
+                        const account = people.find(item => item.userId === person.userId);
+                        return <tr key={person.userId}>
+                          <td className="golive-assignee"><HolderIdentity name={person.displayName} avatar={account?.avatar || ""} role={account?.role} /></td>
+                          <td className="golive-ticket-status">{person.signedAt
+                            ? <span className="status-chip status-done">Đã xác nhận</span>
+                            : <span className="status-chip status-blocked">Chưa xác nhận</span>}</td>
+                          <td className="stat-done-at">{person.signedAt
+                            ? <strong>{prettyStamp(person.signedAt)}</strong>
+                            : <span className="muted"><Clock size={13} aria-hidden="true" /> Đang chờ</span>}</td>
+                        </tr>;
+                      })}</tbody></table></div>
+                    </>}
+                  </div>}
+                </div>
+                <div className="stat-phase-head"><Smartphone size={14} aria-hidden="true" /> Giai đoạn 2 · Test app
+                  <small>{phase === "web" ? "Chờ test web hoàn tất" : release.done + "/" + release.total + " " + rowLabel + " done"}</small></div>
+                {tickets.length === 0 ? <p className="empty">Đợt golive này chưa có {rowLabel} nào.</p> : <>
                 <div className={"stat-testers stat-section" + (testersOpen ? " is-open" : "")}>
                   <button type="button" className="stat-section-toggle" aria-expanded={testersOpen} aria-controls={"stat-testers-" + release.id}
                     onClick={() => toggle(release.id, setCollapsedTesters)}>
@@ -254,6 +321,7 @@ export function StatisticBoard({ people, onToast, onError }: { people: Person[];
                 </div>}
                 </div>}
                 </div>
+                </>}
               </>}
           </div>}
         </li>;

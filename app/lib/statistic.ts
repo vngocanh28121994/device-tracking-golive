@@ -81,3 +81,26 @@ export function untestedNotices(tickets: { userId: string | null; issueKey: stri
   }
   return [...byUser].map(([userId, issueKeys]) => ({ userId, issueKeys, body: untestedBody(issueKeys) }));
 }
+
+// Phase 1 of a golive is the web build: every account with role QE confirms it before the app build
+// (phase 2, the device checklist) starts. Like the Tracking Golive board, only today's QE accounts
+// count, so a sign-off from someone who is no longer QE is ignored.
+export type WebQe = { userId: string; displayName: string; signedAt: string | null };
+export type WebSummary = { total: number; signed: number; done: boolean };
+
+// Who still owes a confirmation comes first, then the confirmed ones in the order they signed.
+export function webRoster(qe: { userId: string; displayName: string }[], signoffs: { userId: string; signedAt: string }[]): WebQe[] {
+  const signed = new Map(signoffs.map(row => [row.userId, row.signedAt]));
+  return qe.map(person => ({ userId: person.userId, displayName: person.displayName, signedAt: signed.get(person.userId) ?? null }))
+    .sort((a, b) => (a.signedAt ? 1 : 0) - (b.signedAt ? 1 : 0) || (a.signedAt || "").localeCompare(b.signedAt || "") || a.displayName.localeCompare(b.displayName, "vi"));
+}
+
+export function webSummary(qeIds: string[], signedIds: string[]): WebSummary {
+  const signed = qeIds.filter(id => signedIds.includes(id)).length;
+  return { total: qeIds.length, signed, done: qeIds.length > 0 && signed === qeIds.length };
+}
+
+// Which phase a golive is in: a finished golive is done, otherwise web until every QE confirmed it.
+export type GolivePhase = "web" | "app" | "completed";
+export const phaseOf = (release: { completedAt: string | null; web: WebSummary }): GolivePhase =>
+  release.completedAt ? "completed" : release.web.done ? "app" : "web";

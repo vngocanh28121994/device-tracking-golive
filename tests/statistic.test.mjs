@@ -122,3 +122,20 @@ assert.equal(markedBy(failed), "Minh Anh");
 assert.equal(markedHow(failed), "Đánh dấu test failed");
 
 console.log("Statistic test-failed: outstanding rather than Done, and its own mark in the report.");
+
+// Web phase: only today's QE accounts count, and the web is done once every one of them confirmed.
+{
+  const { webSummary, webRoster, phaseOf } = await import("../app/lib/statistic.ts");
+  assert.deepEqual(webSummary(["a", "b"], ["a", "x"]), { total: 2, signed: 1, done: false });
+  assert.deepEqual(webSummary(["a", "b"], ["b", "a"]), { total: 2, signed: 2, done: true });
+  assert.deepEqual(webSummary([], []), { total: 0, signed: 0, done: false });
+  const roster = webRoster(
+    [{ userId: "a", displayName: "An" }, { userId: "b", displayName: "Bình" }, { userId: "c", displayName: "Chi" }],
+    [{ userId: "c", signedAt: "2026-11-02T09:00:00.000Z" }, { userId: "a", signedAt: "2026-11-02T10:00:00.000Z" }, { userId: "gone", signedAt: "2026-11-02T08:00:00.000Z" }],
+  );
+  assert.deepEqual(roster.map(person => person.userId), ["b", "c", "a"]);
+  assert.equal(roster[0].signedAt, null);
+  assert.equal(phaseOf({ completedAt: null, web: { total: 2, signed: 1, done: false } }), "web");
+  assert.equal(phaseOf({ completedAt: null, web: { total: 2, signed: 2, done: true } }), "app");
+  assert.equal(phaseOf({ completedAt: "2026-11-03T00:00:00.000Z", web: { total: 2, signed: 1, done: false } }), "completed");
+}
