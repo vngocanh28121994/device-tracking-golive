@@ -929,22 +929,34 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
   .stat-tester-table .stat-stack { height: 6px; }
   .stat-tester-table .stat-stack-counts { margin-top: 6px; gap: 2px 10px; }
   .stat-tester-table .stat-stack-counts strong { font-size: 14px; }
-  .stat-table tbody { display: grid; gap: 10px; padding: 12px; }
-  .stat-table tbody tr { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
-  .stat-table td { display: block; border: 0; padding: 0; text-align: left; width: auto; }
-  .stat-table .stat-pick { grid-column: 1; grid-row: 1; width: auto; align-self: center; }
-  .stat-table .golive-key { grid-column: 2; grid-row: 1; align-self: center; white-space: normal; overflow-wrap: anywhere; font-size: 14px; }
-  .stat-table .golive-ticket-status { grid-column: 3; grid-row: 1; align-self: center; justify-self: end; }
-  .stat-table .golive-summary { grid-column: 1 / -1; grid-row: 2; font-size: 15px; line-height: 1.55; }
-  .stat-table .golive-assignee { grid-column: 1 / -1; grid-row: 3; }
-  .stat-table .stat-web-status { grid-column: 1 / -1; grid-row: 4; min-width: 0; padding-top: 10px; border-top: 1px solid var(--line); }
+  /* Ticket details on phones: a compact card per ticket. The checkbox sits in the top-left corner,
+     key and status share the first line, and the two phases sit side by side as small tiles. */
+  .stat-table tbody { display: grid; gap: 8px; padding: 10px 12px 12px; }
+  .stat-table tbody tr { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px 8px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+  .stat-table td { display: block; border: 0; padding: 0; text-align: left; width: auto; min-width: 0; }
+  .stat-table td.stat-pick { position: absolute; top: 11px; left: 12px; width: auto; padding: 0; }
+  .stat-table .stat-pick input { width: 20px; height: 20px; }
+  .stat-table .golive-key { grid-column: 1; grid-row: 1; align-self: center; padding-left: 30px; white-space: normal; overflow-wrap: anywhere; font-size: 14px; }
+  .stat-table .golive-ticket-status { grid-column: 2; grid-row: 1; align-self: center; justify-self: end; }
+  .stat-table .golive-summary { grid-column: 1 / -1; grid-row: 2; font-size: 14px; line-height: 1.45; }
+  .stat-table .golive-assignee { grid-column: 1 / -1; grid-row: 3; font-size: 13px; }
+  .stat-table .golive-assignee .holder-identity { font-size: 13px; }
+  .stat-table .stat-web-status, .stat-table .stat-done-at { grid-row: 4; align-self: stretch; margin-top: 4px; padding: 8px 10px; border-radius: 10px; background: var(--canvas); }
+  .stat-table tr.stat-row-done .stat-web-status, .stat-table tr.stat-row-done .stat-done-at { background: var(--surface); }
+  .stat-table .stat-web-status { grid-column: 1; }
+  .stat-table .stat-done-at { grid-column: 2; }
   .stat-table .stat-web-status::before, .stat-table .stat-done-at::before { display: block; margin-bottom: 5px; font-size: 10px; font-weight: 650; letter-spacing: .06em; color: var(--muted); }
   .stat-table .stat-web-status::before { content: "PHASE WEB"; }
   .stat-table .stat-done-at::before { content: "PHASE APP"; }
-  .stat-table .stat-done-at { grid-column: 1 / -1; grid-row: 5; min-width: 0; padding-top: 10px; border-top: 1px solid var(--line); }
-  /* A manual golive has no ticket key, so the tester name takes the first row. */
-  .stat-table tbody tr:not(:has(.golive-key)) .golive-assignee { grid-column: 2; grid-row: 1; align-self: center; }
-  .stat-table .stat-pick input { width: 22px; height: 22px; }
+  .stat-table .stat-done-stamp { gap: 2px; }
+  .stat-table .stat-done-stamp strong { font-size: 12px; }
+  .stat-table .stat-done-stamp small, .stat-table .stat-done-at > .muted { font-size: 11px; line-height: 1.4; }
+  .stat-table .status-chip { font-size: 11px; padding: 3px 8px; }
+  /* A manual golive has no key or web column: the tester takes the first line, the app tile the full width. */
+  .stat-table tbody tr:not(:has(.golive-key)) .golive-assignee { grid-column: 1; grid-row: 1; align-self: center; padding-left: 30px; }
+  .stat-table tbody tr:not(:has(.stat-web-status)) .stat-done-at { grid-column: 1 / -1; }
+  /* Dark mode draws a top border on every cell; stacked into cards those read as stray lines. */
+  :root[data-theme="dark"] .stat-table td, :root[data-theme="dark"] .stat-tester-table td { border-top: 0; }
 }
 /* Golive web phase: QE sign-off before the app build */
 .golive-web { display: grid; gap: 12px; margin-bottom: 16px; padding: 16px 18px; }
@@ -1205,5 +1217,6 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 :root[data-theme="dark"] .stat-web-pending strong { color: #e5abb0; }
 :root[data-theme="dark"] .golive-web-outcome { color: #9fdcc5; }
 .stat-table .status-chip { white-space: nowrap; }
+:root[data-theme="dark"] .stat-table tr.stat-row-done .stat-web-status, :root[data-theme="dark"] .stat-table tr.stat-row-done .stat-done-at { background: #1f2f25; }
 :root[data-theme="dark"] .golive-table tr.golive-row-picked { background: #2c2140; }
 :root[data-theme="dark"] .golive-bulk { border-color: #453857; box-shadow: none; }
