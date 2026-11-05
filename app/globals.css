@@ -1430,3 +1430,47 @@ body .stat-details.is-open > .stat-section-toggle, body .stat-details > .stat-se
   body .breadcrumb { flex: 1 1 auto; min-width: 0; }
   body .breadcrumb strong.marquee-title { display: block; font-size: 17px; font-weight: 600; line-height: 1.3; }
 }
+
+/* Tracking Golive filters. Row 1: the scope switch "Tất cả | Của tôi" (the filter testers use most) beside
+   the search; on phones the switch takes its own full row and the search shares a row with the filter
+   button. The column filters use plain-weight fields with sentence-case labels, and one result line
+   underneath says how many rows show and offers "Xoá lọc". */
+.golive-filterbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 12px; }
+.golive-scope { display: inline-flex; flex: none; padding: 4px; gap: 4px; border-radius: 12px; background: var(--lavender); }
+.golive-scope button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px; padding: 0 16px; border: 0; border-radius: 9px; background: transparent; color: var(--muted); font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+.golive-scope button:hover { color: var(--accent); }
+.golive-scope button.active { background: var(--surface); color: var(--accent); font-weight: 600; box-shadow: 0 1px 3px #2a1b3d1f; }
+.golive-scope button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.golive-scope-count { min-width: 22px; padding: 1px 7px; border-radius: 999px; background: #e3d7f5; color: var(--accent); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.golive-scope button.active .golive-scope-count { background: var(--accent); color: #fff; }
+.golive-search-row { display: flex; flex: 1 1 280px; gap: 8px; min-width: 0; }
+.golive-search-row .search { flex: 1 1 auto; }
+.golive-search-row .search input { font-size: 14px; }
+.golive-filter-toggle { display: none; position: relative; align-items: center; justify-content: center; gap: 7px; min-height: 44px; padding: 0 14px; font-weight: 500; }
+.golive-filter-toggle.is-open { border-color: var(--accent); color: var(--accent); background: var(--lavender); }
+.golive-filter-badge { display: grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 12px; font-weight: 600; }
+body .golive-filters { grid-template-columns: minmax(150px, 1fr) minmax(200px, 2fr) minmax(200px, 1.4fr); margin-bottom: 10px; }
+body .golive-filters label { font-size: 12px; font-weight: 500; letter-spacing: 0; color: var(--muted); }
+body .golive-filters input { height: 44px; font-weight: 400; font-size: 14px; }
+body .golive-filters input::placeholder { color: var(--muted); opacity: .8; font-weight: 400; }
+.golive-result-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 36px; margin-bottom: 12px; font-size: 13px; color: var(--muted); }
+.golive-result-line strong { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.golive-result-line .golive-clear { width: auto; height: auto; min-height: 36px; padding: 6px 0 6px 8px; font-size: 13px; }
+:root[data-theme="dark"] .golive-scope-count { background: #3a2f4d; }
+:root[data-theme="dark"] .golive-scope button.active { box-shadow: none; }
+@media (max-width: 900px) {
+  .golive-filterbar { gap: 10px; }
+  .golive-scope { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+  .golive-scope button { min-height: 42px; font-size: 15px; }
+  .golive-search-row { flex-basis: 100%; }
+  .golive-search-row .search input { font-size: 16px; }
+  .golive-filter-toggle { display: inline-flex; flex: none; min-width: 48px; }
+  /* Icon-only on phones, the badge says how many filters are on. */
+  .golive-filter-label { display: none; }
+  .golive-filter-badge { position: absolute; top: -6px; right: -6px; }
+  body .golive-filters { grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 14px; }
+  body .golive-filters label { font-size: 13px; }
+  body .golive-filters input { font-size: 16px; }
+  .golive-result-line { font-size: 14px; margin-bottom: 10px; }
+  .golive-result-line .golive-clear { font-size: 14px; }
+}

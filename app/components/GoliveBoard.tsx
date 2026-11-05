@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, History, CheckCircle2, ArrowUp, ArrowUpDown, Ban, Bell, Check, CircleSlash, Pencil, Globe, FileUp, Laptop, ListFilter, Plus, Rocket, Lock, Search, Smartphone, Tablet, Trash2, Undo2, X, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, History, CheckCircle2, ArrowUp, ArrowUpDown, Ban, Bell, Check, CircleSlash, Pencil, Globe, FileUp, Laptop, ListFilter, Plus, Rocket, Lock, Search, Smartphone, Tablet, Trash2, Undo2, UserRound, X, XCircle } from "lucide-react";
 import { StyledSelect } from "./StyledSelect";
 import { HolderIdentity } from "./HolderIdentity";
 import { LoadingState } from "./LoadingState";
@@ -387,6 +387,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
     return <th aria-sort={active ? (sort.dir === 1 ? "ascending" : "descending") : "none"}><button type="button" className={"golive-sort " + (active ? "active" : "")} onClick={() => setSort(!active ? { key, dir: 1 } : sort.dir === 1 ? { key, dir: -1 } : null)}>{label}<Icon size={13} /></button></th>;
   };
   const done = tickets.filter(fullyTested).length;
+  const mineCount = tickets.filter(item => item.assigneeUserId === currentUserId).length;
   // Bulk updates need tickets, so a manual golive and a completed one have no checkbox column.
   const bulkOn = !manual && !!current && !current.completedAt;
   const pickable = bulkOn ? visible.filter(canSkip) : [];
@@ -454,15 +455,28 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
         </div>
         {webPanel}
         <div className="golive-stats">{counts.map(([status, count]) => <button key={status} className={"golive-stat " + (statusFilter === status ? "active" : "")} aria-pressed={statusFilter === status} onClick={() => setStatusFilter(statusFilter === status ? "__all__" : status)}><span className={statusClass(status)}>{status}</span><strong>{count}</strong><small>{statusFilter === status ? "Đang lọc · bấm để bỏ" : (tickets.length ? Math.round(count / tickets.length * 100) : 0) + "% trên " + tickets.length + " " + rowLabel}</small></button>)}</div>
-        <div className="inventory-toolbar golive-toolbar"><div className="search"><Search size={19} /><input aria-label={manual ? "Tìm người test" : "Tìm ticket"} value={query} onChange={e => setQuery(e.target.value)} placeholder={manual ? "Tìm người test..." : "Tìm mã, tên ticket, người test..."} /></div><label className="golive-mine"><input type="checkbox" checked={mineOnly} onChange={e => setMineOnly(e.target.checked)} /> {manual ? "Chỉ checklist của tôi" : "Chỉ ticket của tôi"}</label><span>{visible.length} {rowLabel}</span></div>
-        <div className="golive-mobile-tools">
-          <button className="outline-button" aria-expanded={filtersOpen} aria-controls="golive-column-filters" onClick={() => setFiltersOpen(!filtersOpen)}><ListFilter size={17} /> Bộ lọc{columnFilterCount > 0 ? " (" + columnFilterCount + ")" : ""}</button>
+        {/* Scope first ("mine" is the filter testers use most), then search and the column filters. */}
+        <div className="golive-filterbar">
+          <div className="golive-scope" role="radiogroup" aria-label={manual ? "Phạm vi checklist" : "Phạm vi ticket"}>
+            <button type="button" role="radio" aria-checked={!mineOnly} className={!mineOnly ? "active" : ""} onClick={() => setMineOnly(false)}>
+              Tất cả <span className="golive-scope-count">{tickets.length}</span></button>
+            <button type="button" role="radio" aria-checked={mineOnly} className={mineOnly ? "active" : ""} onClick={() => setMineOnly(true)}>
+              <UserRound size={16} aria-hidden="true" /> Của tôi <span className="golive-scope-count">{mineCount}</span></button>
+          </div>
+          <div className="golive-search-row">
+            <div className="search"><Search size={19} /><input aria-label={manual ? "Tìm người test" : "Tìm ticket"} value={query} onChange={e => setQuery(e.target.value)} placeholder={manual ? "Tìm người test..." : "Tìm mã, tên ticket, người test..."} />{query && <button type="button" className="search-clear" aria-label="Xoá từ khoá" onClick={() => setQuery("")}><X size={16} /></button>}</div>
+            <button type="button" className={"outline-button golive-filter-toggle" + (filtersOpen ? " is-open" : "")} aria-expanded={filtersOpen} aria-controls="golive-column-filters" aria-label={"Bộ lọc" + (columnFilterCount ? ", đang bật " + columnFilterCount : "")} onClick={() => setFiltersOpen(!filtersOpen)}>
+              <ListFilter size={18} aria-hidden="true" /><span className="golive-filter-label">Bộ lọc</span>{columnFilterCount > 0 && <span className="golive-filter-badge">{columnFilterCount}</span>}</button>
+          </div>
         </div>
         <div id="golive-column-filters" className={"golive-filters" + (filtersOpen ? " is-open" : "")}>
-          {!manual && <><label>MÃ<input list="golive-projects" value={keyFilter} onChange={e => setKeyFilter(e.target.value.trim().toUpperCase())} placeholder="VD: DIP hoặc DIP-2313" /><datalist id="golive-projects">{projects.map(project => <option key={project} value={project} />)}</datalist></label>
-          <label>TÊN TICKET<input value={summaryFilter} onChange={e => setSummaryFilter(e.target.value)} placeholder="Chứa từ khoá..." /></label></>}
-          <label>NGƯỜI TEST<StyledSelect ariaLabel="Lọc theo người test" value={testerFilter} onChange={setTesterFilter} options={testerOptions} placeholder="Tất cả người test" /></label>
-          {filtered && <button type="button" className="outline-button golive-clear" onClick={() => { resetFilters(); setMineOnly(false); }}><X size={15} /> Xoá lọc</button>}
+          {!manual && <><label>Mã ticket<input list="golive-projects" value={keyFilter} onChange={e => setKeyFilter(e.target.value.trim().toUpperCase())} placeholder="VD: DIP hoặc DIP-2313" /><datalist id="golive-projects">{projects.map(project => <option key={project} value={project} />)}</datalist></label>
+          <label>Tên ticket<input value={summaryFilter} onChange={e => setSummaryFilter(e.target.value)} placeholder="Chứa từ khoá..." /></label></>}
+          <label>Người test<StyledSelect ariaLabel="Lọc theo người test" value={testerFilter} onChange={setTesterFilter} options={testerOptions} placeholder="Tất cả người test" /></label>
+        </div>
+        <div className="golive-result-line" aria-live="polite">
+          <span>Hiển thị <strong>{visible.length}</strong>/{tickets.length} {rowLabel}{mineOnly ? " của tôi" : ""}</span>
+          {filtered && <button type="button" className="text-button golive-clear" onClick={() => { resetFilters(); setMineOnly(false); }}><X size={15} /> Xoá lọc</button>}
         </div>
         {bulkOn && pickedCount > 0 && <div className="golive-bulk" role="region" aria-label="Cập nhật hàng loạt">
           <span className="golive-bulk-count">Đã chọn <strong>{pickedCount}</strong> ticket · cập nhật {appPhase ? <><Smartphone size={14} aria-hidden="true" /> Phase app</> : <><Globe size={14} aria-hidden="true" /> Phase web</>}:</span>
