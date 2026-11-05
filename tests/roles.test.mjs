@@ -11,7 +11,6 @@ assert.equal(validRole("Admin"), false);
 console.log("Role permissions: administrator keeps access independently of work role; ordinary QE/DEV cannot assign roles.");
 
 // The Statistic screen is for the Manager role only; the admin email gets no exception there.
-import { canViewStatistic } from "../app/lib/roles.ts";
 assert.equal(canViewStatistic("Manager"), true);
 assert.equal(canViewStatistic("QE"), false);
 assert.equal(canViewStatistic("DEV"), false);
