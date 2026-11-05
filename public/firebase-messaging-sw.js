@@ -2,7 +2,7 @@
 self.addEventListener("push", event => {
   let data = {};
   try { data = (event.data && event.data.json().data) || {}; } catch { data = {}; }
-  event.waitUntil(self.registration.showNotification(data.title || "Golive", { body: data.body || "", icon: "/favicon.svg", data: { link: data.link || "/" } }));
+  event.waitUntil(self.registration.showNotification(data.title || "Golive", { body: data.body || "", icon: "/icon-192.png", data: { link: data.link || "/" } }));
 });
 
 self.addEventListener("notificationclick", event => {
