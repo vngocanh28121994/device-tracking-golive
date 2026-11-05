@@ -1,6 +1,6 @@
 {
-  "name": "Quản lý thiết bị",
-  "short_name": "Thiết bị",
+  "name": "Team party",
+  "short_name": "Team party",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0a1e3c",
