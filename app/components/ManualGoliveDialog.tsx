@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Plus, X } from "lucide-react";
 import { RoleAccount, RoleAccountList } from "./AccountRoles";
 import { HolderIdentity } from "./HolderIdentity";
+import { isQe } from "../lib/roles";
 
 export function ManualGoliveDialog({ onClose, onCreated, onManageRoles }: { onClose: () => void; onCreated: (id: string) => void; onManageRoles: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -17,7 +18,7 @@ export function ManualGoliveDialog({ onClose, onCreated, onManageRoles }: { onCl
     void fetch("/api/profile?list=1", { cache: "no-store", signal: controller.signal }).then(async response => {
       const data = await response.json() as RoleAccountList;
       if (!response.ok) throw new Error(data.error || "Không thể tải danh sách QE.");
-      setTesters((data.accounts as RoleAccount[]).filter(account => account.role === "QE"));
+      setTesters((data.accounts as RoleAccount[]).filter(account => isQe(account.role)));
     }).catch(reason => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "Không thể tải danh sách QE."); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => { controller.abort(); element?.close(); };

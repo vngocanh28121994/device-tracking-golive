@@ -5,6 +5,7 @@ import { StyledSelect } from "./StyledSelect";
 import { HolderIdentity } from "./HolderIdentity";
 import { LoadingState } from "./LoadingState";
 import { useConfirm } from "./ConfirmDialog";
+import { isManager } from "../lib/roles";
 import { readUrlParam, writeUrlParams } from "../lib/url-state";
 import { ImportedTicket, inAppPhase, isWebStatus, normalizeName, releaseNameFromCsv, ticketsFromCsv, webSettled, WebStatus } from "../lib/golive";
 import { ManualGoliveDialog } from "./ManualGoliveDialog";
@@ -296,7 +297,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
   };
   // The tester or a Manager may mark a CSV ticket as not needing a test while the release is running.
   // A ticket whose tester has no matching account can be marked by anyone signed in.
-  const canSkip = (ticket: Ticket) => !manual && !current?.completedAt && (!ticket.assigneeUserId || ticket.assigneeUserId === currentUserId || people.find(person => person.userId === currentUserId)?.role === "Manager");
+  const canSkip = (ticket: Ticket) => !manual && !current?.completedAt && (!ticket.assigneeUserId || ticket.assigneeUserId === currentUserId || isManager(people.find(person => person.userId === currentUserId)?.role));
   // "Đã test xong" keeps the checklist below the badge so the devices actually tested stay visible.
   const skipBadge = (ticket: Ticket) => {
     const cannot = ticket.skipKind === "cannot-test";
@@ -404,7 +405,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
   const myWebOpen = manual ? 0 : tickets.filter(item => item.assigneeUserId === currentUserId && !webSettled(item.webStatus)).length;
   // Phase 1 is the web build; once every QE confirms it, the device checklist below is the app phase.
   const webPanel = web.qe.length === 0
-    ? <section className="golive-web panel"><div className="golive-web-head"><span className="golive-web-step"><Globe size={16} /> Giai đoạn 1 · Test web</span></div><p className="golive-web-note">Chưa có tài khoản QE nào để theo dõi test web.</p>{me?.role === "Manager" && <button type="button" className="outline-button" onClick={onManageRoles}>Gán role QE</button>}</section>
+    ? <section className="golive-web panel"><div className="golive-web-head"><span className="golive-web-step"><Globe size={16} /> Giai đoạn 1 · Test web</span></div><p className="golive-web-note">Chưa có tài khoản QE nào để theo dõi test web.</p>{isManager(me?.role) && <button type="button" className="outline-button" onClick={onManageRoles}>Gán role QE</button>}</section>
     : webDone
       ? <section className="golive-web golive-web-done" role="status"><CheckCircle2 size={22} aria-hidden="true" /><div className="golive-web-done-text"><strong>Quá trình test web đã hoàn tất, có thể build app.</strong><small>{web.qe.length}/{web.qe.length} QE đã xác nhận · Giai đoạn 2: test app theo checklist thiết bị bên dưới.</small></div>{running && iSignedWeb && <button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => void signWeb(false)}><Undo2 size={14} /> Thu hồi</button>}</section>
       : <section className="golive-web panel">
@@ -420,7 +421,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
         <div className="golive-web-pending">
           <span className="golive-web-label">Chưa xác nhận ({webPending.length})</span>
           <ul>{webPending.map(person => <li key={person.userId}><HolderIdentity name={person.displayName} avatar={people.find(item => item.userId === person.userId)?.avatar} /></li>)}</ul>
-          {running && me?.role === "Manager" && <button type="button" className="outline-button golive-web-remind" disabled={busy} onClick={() => void remindWeb()}><Bell size={15} /> Nhắc nhở</button>}
+          {running && isManager(me?.role) && <button type="button" className="outline-button golive-web-remind" disabled={busy} onClick={() => void remindWeb()}><Bell size={15} /> Nhắc nhở</button>}
         </div>
       </section>;
 
