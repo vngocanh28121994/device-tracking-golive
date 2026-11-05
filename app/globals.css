@@ -1553,3 +1553,14 @@ body .golive-skip-actions .golive-skip-button svg { flex: none; }
   .golive-lock-icon { width: 26px; height: 26px; }
   .golive-lock-icon svg { width: 14px; height: 14px; }
 }
+@media (min-width: 901px) {
+  /* Locked app phase on desktop: lock and "Chưa mở" share the first line, the description runs the full
+     width beneath; beside the four outcome buttons it matches their height (4 x 34px + 3 x 6px). */
+  .golive-phase-lock { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; align-content: center; column-gap: 8px; row-gap: 6px; box-sizing: border-box; width: 100%; }
+  .golive-phase-lock-text { display: contents; }
+  .golive-phase-lock-text strong { grid-column: 2; }
+  .golive-phase-lock-text > span, .golive-phase-lock-text small { grid-column: 1 / -1; }
+  .table-panel .golive-table tr:has(.golive-web-cell .golive-skip-actions) td.golive-devices.golive-phase-locked .golive-phase-lock { min-height: 154px; }
+  /* In the web column the buttons are the whole content, so no top gap: they line up with the lock box. */
+  body .golive-web-cell > .golive-skip-actions { margin-top: 0; }
+}
