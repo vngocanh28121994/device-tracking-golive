@@ -29,7 +29,7 @@ export function TestFailedDialog({ issueKey, initialReason = "", editing = false
       <label>Lý do test failed<textarea ref={field} rows={3} maxLength={500} value={reason} onChange={event => setReason(event.target.value)} required placeholder="Ví dụ: Nút thanh toán không phản hồi trên iOS 18" /></label>
       <div className="modal-actions">
         <button type="button" className="outline-button" onClick={onCancel}>Huỷ</button>
-        <button type="submit" className="danger-button" disabled={busy || !trimmed}>{editing ? "Lưu" : "Đánh dấu test failed"}</button>
+        <button type="submit" className="primary-button danger-button" disabled={busy || !trimmed}>{editing ? "Lưu" : "Đánh dấu test failed"}</button>
       </div>
     </form>
   </dialog>;

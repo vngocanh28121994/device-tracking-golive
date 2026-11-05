@@ -4,6 +4,7 @@ import { getDb } from "../../../db";
 import { devices, goliveDeviceChecks, goliveReleases, goliveTicketDevices, goliveTickets, goliveWebSignoffs, userProfiles } from "../../../db/schema";
 import { inAppPhase, isWebStatus, matchAccount, webSettled } from "../../lib/golive";
 import { waitUntil } from "cloudflare:workers";
+import { accountRoles, isManager, isQe, managerRoles, qeRoles } from "../../lib/roles";
 import { notifyRoles, notifyUsers, pushEnabled } from "../../lib/push";
 
 type Db = ReturnType<typeof getDb>;
@@ -11,7 +12,7 @@ const MAX_COMPLETED = 10;
 type Profile = { userId: string; displayName: string };
 
 // Managers and PMs follow progress; everyone hears when a phase or the release is finished.
-const WATCHERS = ["Manager", "PM"], EVERYONE = ["Manager", "QE", "DEV", "PM"];
+const WATCHERS = [...managerRoles, "PM"], EVERYONE = [...accountRoles];
 
 // A QE is announced once their last open ticket of the release is Done; the last open ticket announces the release.
 // ponytail: two loads racing on the same ticket can announce twice; add a claimed flag if that gets noisy.
@@ -85,7 +86,7 @@ const ticketWithRelease = (db: Db, ticketId: number) =>
 async function webPhase(db: Db, releaseId: string) {
   if (!releaseId) return { qe: [], signed: {} };
   const [qe, rows] = await Promise.all([
-    db.select({ userId: userProfiles.userId, displayName: userProfiles.displayName }).from(userProfiles).where(eq(userProfiles.role, "QE")).orderBy(userProfiles.displayName),
+    db.select({ userId: userProfiles.userId, displayName: userProfiles.displayName }).from(userProfiles).where(inArray(userProfiles.role, qeRoles)).orderBy(userProfiles.displayName),
     db.select().from(goliveWebSignoffs).where(eq(goliveWebSignoffs.releaseId, releaseId)),
   ]);
   return { qe, signed: Object.fromEntries(rows.map(row => [row.userId, row.signedAt])) };
@@ -142,7 +143,7 @@ export async function POST(request: Request) {
     if (body.action === "create-manual") {
       const name = clean(body.name, 120), fixVersion = clean(body.fixVersion, 120);
       if (name.length < 2 || !fixVersion) return error("Nhập tên đợt golive (ít nhất 2 ký tự) và fixVersion.");
-      const testers = await db.select({ userId: userProfiles.userId, displayName: userProfiles.displayName }).from(userProfiles).where(eq(userProfiles.role, "QE"));
+      const testers = await db.select({ userId: userProfiles.userId, displayName: userProfiles.displayName }).from(userProfiles).where(inArray(userProfiles.role, qeRoles));
       if (!testers.length) return error("Chưa có tài khoản QE. Hãy nhờ Manager gán role trong Tài khoản của tôi trước.");
       const [profile] = await db.select({ displayName: userProfiles.displayName }).from(userProfiles).where(eq(userProfiles.userId, user.userId));
       const id = crypto.randomUUID();
@@ -217,7 +218,7 @@ export async function POST(request: Request) {
       const me = profiles.find(item => item.userId === user.userId);
       const tester = ticket.assigneeUserId ?? (ticket.assignee ? matchAccount(profiles, ticket.assignee) : null);
       // A tester without an account (or an outside helper) cannot act, so anyone signed in may mark that ticket.
-      if (tester && tester !== user.userId && me?.role !== "Manager") return error("Chỉ người test của ticket hoặc Manager mới được đánh dấu ticket.", 403);
+      if (tester && tester !== user.userId && !isManager(me?.role)) return error("Chỉ người test của ticket hoặc Manager mới được đánh dấu ticket.", 403);
       if (completedAt) return error("Đợt golive đã hoàn thành, không thể sửa.", 409);
       if (!appPhaseOf(await webPhase(db, ticket.releaseId))) return error(WEB_PHASE_ONLY, 409);
       const by = me?.displayName || user.displayName || user.email;
@@ -241,7 +242,7 @@ export async function POST(request: Request) {
       const { ticket, completedAt } = found;
       const me = profiles.find(item => item.userId === user.userId);
       const tester = ticket.assigneeUserId ?? (ticket.assignee ? matchAccount(profiles, ticket.assignee) : null);
-      if (tester && tester !== user.userId && me?.role !== "Manager") return error("Chỉ người test của ticket hoặc Manager mới được đánh dấu ticket.", 403);
+      if (tester && tester !== user.userId && !isManager(me?.role)) return error("Chỉ người test của ticket hoặc Manager mới được đánh dấu ticket.", 403);
       if (completedAt) return error("Đợt golive đã hoàn thành, không thể sửa.", 409);
       if (!appPhaseOf(await webPhase(db, ticket.releaseId))) return error(WEB_PHASE_ONLY, 409);
       const by = me?.displayName || user.displayName || user.email;
@@ -281,7 +282,7 @@ export async function POST(request: Request) {
       const picked = rows.filter(row => ids.includes(row.id));
       const allowed = picked.filter(row => {
         const tester = row.assigneeUserId ?? (row.assignee ? matchAccount(profiles, row.assignee) : null);
-        return !tester || tester === user.userId || me?.role === "Manager";
+        return !tester || tester === user.userId || isManager(me?.role);
       });
       if (!allowed.length) return error("Bạn không có quyền đánh dấu các ticket đã chọn. Chỉ người test của ticket hoặc Manager mới được đánh dấu.", 403);
       const by = me?.displayName || user.displayName || user.email;
@@ -312,7 +313,7 @@ export async function POST(request: Request) {
       const { ticket, completedAt } = found;
       const me = profiles.find(item => item.userId === user.userId);
       const tester = ticket.assigneeUserId ?? (ticket.assignee ? matchAccount(profiles, ticket.assignee) : null);
-      if (tester && tester !== user.userId && me?.role !== "Manager") return error("Chỉ người test của ticket hoặc Manager mới được đánh dấu ticket.", 403);
+      if (tester && tester !== user.userId && !isManager(me?.role)) return error("Chỉ người test của ticket hoặc Manager mới được đánh dấu ticket.", 403);
       if (completedAt) return error("Đợt golive đã hoàn thành, không thể sửa.", 409);
       if (appPhaseOf(await webPhase(db, ticket.releaseId))) return error(APP_PHASE_ONLY, 409);
       const by = me?.displayName || user.displayName || user.email;
@@ -330,7 +331,7 @@ export async function POST(request: Request) {
       ]);
       if (!release) return error("Không tìm thấy đợt golive.", 404);
       if (release.completedAt) return error("Đợt golive đã hoàn thành, không thể sửa.", 409);
-      if (me?.role !== "QE") return error("Chỉ tài khoản QE mới xác nhận hoàn thành test web.", 403);
+      if (!isQe(me?.role)) return error("Chỉ tài khoản QE mới xác nhận hoàn thành test web.", 403);
       if (done) {
         // Every ticket of this QE needs a settled web outcome first, so the web column is never left blank.
         const [rows, profiles] = await Promise.all([
@@ -358,7 +359,7 @@ export async function POST(request: Request) {
         webPhase(db, releaseId),
         db.select({ name: goliveReleases.name }).from(goliveReleases).where(eq(goliveReleases.id, releaseId)),
       ]);
-      if (me?.role !== "Manager") return error("Chỉ Manager mới được nhắc nhở.", 403);
+      if (!isManager(me?.role)) return error("Chỉ Manager mới được nhắc nhở.", 403);
       if (!release) return error("Không tìm thấy đợt golive.", 404);
       const pending = web.qe.filter(person => !(person.userId in web.signed)).map(person => person.userId);
       if (!await pushEnabled(db, "remind-web")) return error("Nhắc nhở qua thông báo đang bị tắt trong cài đặt.", 409);

@@ -3,7 +3,7 @@ import { waitUntil } from "cloudflare:workers";
 import { requireMember } from "../../lib/member-access";
 import { getDb } from "../../../db";
 import { goliveDeviceChecks, goliveReleases, goliveTickets, goliveWebSignoffs, userProfiles } from "../../../db/schema";
-import { canViewStatistic } from "../../lib/roles";
+import { canViewStatistic, isQe, qeRoles } from "../../lib/roles";
 import { matchAccount } from "../../lib/golive";
 import { notifyUsers, pushEnabled } from "../../lib/push";
 import { untestedNotices, webRoster, webSummary } from "../../lib/statistic";
@@ -43,7 +43,7 @@ export async function GET(request: Request) {
         db.select({ userId: userProfiles.userId, displayName: userProfiles.displayName, role: userProfiles.role }).from(userProfiles),
         db.select({ userId: goliveWebSignoffs.userId, signedAt: goliveWebSignoffs.signedAt }).from(goliveWebSignoffs).where(eq(goliveWebSignoffs.releaseId, releaseId)),
       ]);
-      const web = webRoster(profiles.filter(person => person.role === "QE"), signoffs);
+      const web = webRoster(profiles.filter(person => isQe(person.role)), signoffs);
       const tickets = rows.map(ticket => {
         const tick = ticks.find(item => item.ticketId === ticket.id);
         return {
@@ -66,7 +66,7 @@ export async function GET(request: Request) {
         done: sql<number>`sum(case when ${goliveTickets.doneAt} is null then 0 else 1 end)`,
         failed: sql<number>`sum(case when ${goliveTickets.failedAt} is null then 0 else 1 end)`,
       }).from(goliveTickets).groupBy(goliveTickets.releaseId),
-      db.select({ userId: userProfiles.userId }).from(userProfiles).where(eq(userProfiles.role, "QE")),
+      db.select({ userId: userProfiles.userId }).from(userProfiles).where(inArray(userProfiles.role, qeRoles)),
       db.select({ releaseId: goliveWebSignoffs.releaseId, userId: goliveWebSignoffs.userId }).from(goliveWebSignoffs),
     ]);
     const qeIds = qe.map(person => person.userId);

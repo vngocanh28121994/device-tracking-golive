@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Ban, Bell, CheckCircle2, ChevronDown, Clock, Globe, ListChecks, Rocket, Smartphone, X } from "lucide-react";
 import { HolderIdentity } from "./HolderIdentity";
 import { LoadingState } from "./LoadingState";
+import { isManager as isManagerRole } from "../lib/roles";
 import { doneKindOf, markedAt, markedBy, markedHow, phaseOf, tallyByTester, tallyWebByTester, webKindOf, WebQe, WebSummary } from "../lib/statistic";
 
 type Release = { id: string; name: string; source: string; fixVersion: string; createdBy: string; createdAt: string; completedAt: string | null; completedBy: string | null; total: number; done: number; failed: number; web: WebSummary };
@@ -58,7 +59,7 @@ export function StatisticBoard({ people, currentUserId, onToast, onError }: { pe
   const [collapsedWebTesters, setCollapsedWebTesters] = useState<string[]>([]);
   const [collapsedApp, setCollapsedApp] = useState<string[]>([]);
   const [webByRelease, setWebByRelease] = useState<Record<string, WebQe[]>>({});
-  const isManager = people.find(person => person.userId === currentUserId)?.role === "Manager";
+  const isManager = isManagerRole(people.find(person => person.userId === currentUserId)?.role);
   const [tip, setTip] = useState<Tip | null>(null);
   const [sending, setSending] = useState("");
 
