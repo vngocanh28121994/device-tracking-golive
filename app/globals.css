@@ -1408,3 +1408,22 @@ body .stat-details.is-open > .stat-section-toggle, body .stat-details > .stat-se
   body .stat-table td.golive-ticket-status .status-chip.status-failed, body .table-panel .golive-table td.golive-ticket-status .status-chip.status-failed { background: #c4505c; color: #fff; }
   body .stat-table .golive-assignee .holder-identity, body .table-panel .golive-table .golive-assignee .holder-identity { font-size: 16px; }
 }
+
+/* Page title in the top bar: one line; when it does not fit it scrolls to its end and back, pausing at
+   each end, with soft edges. Reduced motion gets an ellipsis instead. */
+.marquee-title { display: inline-block; max-width: 100%; overflow: hidden; white-space: nowrap; vertical-align: bottom; }
+.marquee-title > span { display: inline-block; }
+/* The breadcrumb styles its "/" separator as a span; the title's own span must not pick that up. */
+.breadcrumb .marquee-title > span { margin: 0; color: inherit; font-size: inherit; }
+.marquee-title.is-overflowing { -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 10px, #000 calc(100% - 10px), transparent 100%); mask-image: linear-gradient(90deg, transparent 0, #000 10px, #000 calc(100% - 10px), transparent 100%); }
+.marquee-title.is-overflowing > span { padding-inline: 10px; animation: marquee-title var(--marquee-time, 6s) ease-in-out infinite alternate; }
+@keyframes marquee-title { 0%, 18% { transform: translateX(0); } 82%, 100% { transform: translateX(var(--marquee-shift, 0px)); } }
+@media (prefers-reduced-motion: reduce) {
+  .marquee-title.is-overflowing { -webkit-mask-image: none; mask-image: none; }
+  .marquee-title.is-overflowing > span { display: block; overflow: hidden; text-overflow: ellipsis; animation: none; padding-inline: 0; }
+}
+@media (max-width: 900px) {
+  /* The title takes the room between the menu button and the actions, and may shrink into it. */
+  body .breadcrumb { flex: 1 1 auto; min-width: 0; }
+  body .breadcrumb strong.marquee-title { display: block; font-size: 17px; font-weight: 600; line-height: 1.3; }
+}
