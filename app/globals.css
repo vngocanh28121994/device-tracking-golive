@@ -49,7 +49,9 @@ svg { flex-shrink: 0; }
 .sidebar { width: 248px; flex: 0 0 248px; background: var(--surface); border-right: 1px solid var(--line); display: flex; flex-direction: column; padding: 32px 18px 24px; height: 100dvh; position: sticky; top: 0; }
 .brand { display: flex; align-items: center; gap: 12px; padding: 0 10px 42px; }
 /* The site icon (the same artwork as the favicon); its rounded corners are transparent in the file. */
-.brand-icon { display: block; flex: none; width: 40px; height: 40px; background: url("/icon-192.png") center / cover no-repeat; }
+.brand-icon { display: block; flex: none; width: 40px; height: 40px; background: url("/icon-light-192.png") center / cover no-repeat; }
+/* The sidebar logo follows the app's own light/dark switch. */
+:root[data-theme="dark"] .brand-icon { background-image: url("/icon-192.png"); }
 .brand strong { display: block; font-size: 16px; letter-spacing: -.03em; font-weight: 650; white-space: nowrap; }
 .brand small { display: block; font-size: 10px; color: var(--muted); letter-spacing: .15em; margin-top: 3px; }
 .sidebar nav { display: grid; gap: 6px; }

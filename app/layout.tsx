@@ -5,7 +5,14 @@ export const metadata: Metadata = {
   title: "Quản lý thiết bị",
   description: "Quản lý từng thiết bị, người đang giữ và lịch sử bàn giao trong đội.",
   icons: {
-    icon: [{ url: "/favicon.ico", sizes: "16x16 32x32 48x48" }, { url: "/icon-192.png", type: "image/png", sizes: "192x192" }],
+    // Light browsers get the light tile, dark ones the navy original. Every entry carries a media query,
+    // so a browser that prefers the larger PNG still follows the colour scheme.
+    icon: [
+      { url: "/favicon-light.ico", sizes: "16x16 32x32 48x48", media: "(prefers-color-scheme: light)" },
+      { url: "/icon-light-192.png", type: "image/png", sizes: "192x192", media: "(prefers-color-scheme: light)" },
+      { url: "/favicon.ico", sizes: "16x16 32x32 48x48", media: "(prefers-color-scheme: dark)" },
+      { url: "/icon-192.png", type: "image/png", sizes: "192x192", media: "(prefers-color-scheme: dark)" },
+    ],
     apple: "/apple-touch-icon.png",
   },
   manifest: "/manifest.webmanifest",
