@@ -1474,3 +1474,44 @@ body .golive-filters input::placeholder { color: var(--muted); opacity: .8; font
   .golive-result-line { font-size: 14px; margin-bottom: 10px; }
   .golive-result-line .golive-clear { font-size: 14px; }
 }
+
+/* Locked phase box (all widths): a "Chưa mở" pill with a lock, then why and when it opens. */
+.golive-phase-lock { display: grid; justify-items: start; gap: 6px; }
+.golive-lock-pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px; background: #efedf2; color: #5c566a; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.golive-lock-pill svg { flex: none; }
+.golive-phase-lock-text { color: var(--muted); line-height: 1.45; }
+:root[data-theme="dark"] .golive-lock-pill { background: #332a3d; color: #c7bfcc; }
+
+/* Ticket cards on phones: "Phase web" and "Phase app" read as sub-headers (14px, ink, a dot in the
+   phase colour, as on Statistic), each on its own line above its content. The phase that is not
+   running keeps its header and shows its content in a quiet tile below it. */
+@media (max-width: 900px) {
+  body .table-panel .golive-table td.golive-web-cell { --phase-dot: var(--accent); }
+  body .table-panel .golive-table td.golive-devices { --phase-dot: #b7791f; }
+  :root[data-theme="dark"] body .table-panel .golive-table td.golive-devices { --phase-dot: #f0c98d; }
+  body .table-panel .golive-table td.golive-web-cell::before, body .table-panel .golive-table td.golive-devices::before {
+    display: block; margin: 0 0 8px; padding-left: 16px;
+    background: radial-gradient(circle at 4px 50%, var(--phase-dot) 4px, transparent 4.5px) no-repeat;
+    font-size: 14px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--ink); line-height: 1.4;
+  }
+  body .table-panel .golive-table td.golive-web-cell::before { content: "Phase web"; }
+  body .table-panel .golive-table td.golive-devices::before { content: "Phase app"; }
+  body .table-panel .golive-table .golive-web-cell, body .table-panel .golive-table .golive-devices { margin-top: 6px; }
+  /* A locked cell is no longer a tile itself: header above, tile below. */
+  body .table-panel .golive-table td.golive-phase-locked,
+  body .table-panel .golive-table tr:has(.golive-checklist.complete) td.golive-phase-locked { display: block; padding: 0; background: none; border-radius: 0; }
+  body .table-panel .golive-table td.golive-phase-locked::before { margin-bottom: 8px; }
+  body .table-panel .golive-table td.golive-devices.golive-phase-locked .golive-phase-lock {
+    width: 100%; max-width: none; padding: 12px 14px; gap: 6px; border: 1px dashed #d8d0e2; border-radius: 12px; background: var(--canvas); font-size: 14px;
+  }
+  body .table-panel .golive-table td.golive-devices.golive-phase-locked .golive-lock-pill { font-size: 13px; }
+  body .table-panel .golive-table td.golive-devices.golive-phase-locked .golive-phase-lock-text small { font-size: 13px; }
+  /* The finished web phase during the app phase: its outcome in a quiet tile, still readable. */
+  body .table-panel .golive-table td.golive-web-cell.golive-phase-locked > * { opacity: .8; }
+  body .table-panel .golive-table td.golive-web-cell.golive-phase-locked .golive-skipped {
+    padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--canvas);
+  }
+  body .table-panel .golive-table tr:has(.golive-checklist.complete) td.golive-phase-locked .golive-skipped,
+  body .table-panel .golive-table tr:has(.golive-checklist.complete) td.golive-devices.golive-phase-locked .golive-phase-lock { background: var(--surface); }
+  :root[data-theme="dark"] body .table-panel .golive-table td.golive-devices.golive-phase-locked .golive-phase-lock { border-color: #453857; }
+}
