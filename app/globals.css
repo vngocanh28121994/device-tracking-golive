@@ -1282,9 +1282,6 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
   body .golive-bulk, body .golive-bulk-actions .outline-button, body .golive-bulk-actions .text-button { font-size: 14px; }
   /* A locked phase with a reason runs onto several lines: keep its label at the top, not centred. */
   body .table-panel .golive-table td.golive-phase-locked { align-items: flex-start; }
-  /* The four outcome buttons as a tidy 2 x 2 grid instead of two loose rows. */
-  body .table-panel .golive-table .golive-skip-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; margin-top: 2px; }
-  body .table-panel .golive-table .golive-skip-actions .golive-skip-button { min-height: 40px; padding: 6px 0; white-space: normal; text-align: left; }
   body .golive-toolbar > span { font-size: 13px; }
 
   /* Statistic: golive card head, icon beside the name */
@@ -1477,10 +1474,7 @@ body .golive-filters input::placeholder { color: var(--muted); opacity: .8; font
 
 /* Locked phase box (all widths): a "Chưa mở" pill with a lock, then why and when it opens. */
 .golive-phase-lock { display: grid; justify-items: start; gap: 6px; }
-.golive-lock-pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px; background: #efedf2; color: #5c566a; font-size: 12px; font-weight: 600; white-space: nowrap; }
-.golive-lock-pill svg { flex: none; }
 .golive-phase-lock-text { color: var(--muted); line-height: 1.45; }
-:root[data-theme="dark"] .golive-lock-pill { background: #332a3d; color: #c7bfcc; }
 
 /* Ticket cards on phones: "Phase web" and "Phase app" read as sub-headers (14px, ink, a dot in the
    phase colour, as on Statistic), each on its own line above its content. The phase that is not
@@ -1504,7 +1498,6 @@ body .golive-filters input::placeholder { color: var(--muted); opacity: .8; font
   body .table-panel .golive-table td.golive-devices.golive-phase-locked .golive-phase-lock {
     width: 100%; max-width: none; padding: 12px 14px; gap: 6px; border: 1px dashed #d8d0e2; border-radius: 12px; background: var(--canvas); font-size: 14px;
   }
-  body .table-panel .golive-table td.golive-devices.golive-phase-locked .golive-lock-pill { font-size: 13px; }
   body .table-panel .golive-table td.golive-devices.golive-phase-locked .golive-phase-lock-text small { font-size: 13px; }
   /* The finished web phase during the app phase: its outcome in a quiet tile, still readable. */
   body .table-panel .golive-table td.golive-web-cell.golive-phase-locked > * { opacity: .8; }
@@ -1514,4 +1507,49 @@ body .golive-filters input::placeholder { color: var(--muted); opacity: .8; font
   body .table-panel .golive-table tr:has(.golive-checklist.complete) td.golive-phase-locked .golive-skipped,
   body .table-panel .golive-table tr:has(.golive-checklist.complete) td.golive-devices.golive-phase-locked .golive-phase-lock { background: var(--surface); }
   :root[data-theme="dark"] body .table-panel .golive-table td.golive-devices.golive-phase-locked .golive-phase-lock { border-color: #453857; }
+}
+
+/* Outcome buttons (Đã test xong / Không cần test / Không test được / Test failed): real buttons with a
+   fill and a border in a 2 x 2 grid; Test failed is drawn in red. */
+body .golive-skip-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+body .golive-skip-actions .golive-skip-button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 38px; padding: 6px 10px;
+  border: 1px solid #d9cdea; border-radius: 10px; background: #faf7fe; color: var(--accent);
+  font-size: 13px; font-weight: 500; line-height: 1.25; text-align: center; white-space: normal; text-decoration: none;
+}
+body .golive-skip-actions .golive-skip-button:hover:not(:disabled) { background: var(--lavender); border-color: var(--accent); text-decoration: none; }
+body .golive-skip-actions .golive-skip-button.golive-fail-button { border-color: #e3a8b0; background: #fdf4f5; color: #a3333d; }
+body .golive-skip-actions .golive-skip-button.golive-fail-button:hover:not(:disabled) { background: #fbe7ea; border-color: #c4505c; }
+body .golive-skip-actions .golive-skip-button svg { flex: none; }
+:root[data-theme="dark"] body .golive-skip-actions .golive-skip-button { border-color: #453857; background: #241b30; }
+:root[data-theme="dark"] body .golive-skip-actions .golive-skip-button.golive-fail-button { border-color: #7a3a42; background: #2e1a1e; color: #e5abb0; }
+
+/* Locked app phase: a calm notice in the app phase's amber, a lock in a round badge on the left and
+   "Chưa mở" with when it opens on the right. */
+.golive-phase-lock { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid #f0dfc0; border-radius: 12px; background: #fffaf1; }
+.golive-lock-icon { display: grid; place-items: center; flex: none; width: 30px; height: 30px; border-radius: 999px; background: #fcebc9; color: #a8691a; }
+.golive-phase-lock-text { display: grid; gap: 2px; min-width: 0; padding-top: 1px; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.golive-phase-lock-text strong { color: var(--ink); font-size: 13px; font-weight: 600; }
+.golive-phase-lock-text small { font-size: 11px; }
+:root[data-theme="dark"] .golive-phase-lock { border-color: #4a3a22; background: #261f16; }
+:root[data-theme="dark"] .golive-lock-icon { background: #3d2e1a; color: #f0c98d; }
+@media (max-width: 900px) {
+  body .golive-skip-actions .golive-skip-button { min-height: 44px; font-size: 14px; }
+  body .table-panel .golive-table td.golive-devices.golive-phase-locked .golive-phase-lock,
+  body .table-panel .golive-table tr:has(.golive-checklist.complete) td.golive-devices.golive-phase-locked .golive-phase-lock {
+    display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid #f0dfc0; border-radius: 12px; background: #fffaf1;
+  }
+  body .table-panel .golive-table td.golive-devices.golive-phase-locked .golive-lock-icon { width: 36px; height: 36px; }
+  body .table-panel .golive-table td.golive-devices.golive-phase-locked .golive-phase-lock-text { font-size: 14px; }
+  body .table-panel .golive-table td.golive-devices.golive-phase-locked .golive-phase-lock-text strong { font-size: 15px; }
+  body .table-panel .golive-table td.golive-devices.golive-phase-locked .golive-phase-lock-text small { font-size: 13px; }
+  :root[data-theme="dark"] body .table-panel .golive-table td.golive-devices.golive-phase-locked .golive-phase-lock { border-color: #4a3a22; background: #261f16; }
+}
+@media (min-width: 901px) {
+  /* Table columns are narrow on desktop: one button per row, label left, so no label breaks. */
+  body .golive-skip-actions { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  body .golive-skip-actions .golive-skip-button { justify-content: flex-start; min-height: 34px; padding: 5px 10px; white-space: nowrap; }
+  .golive-phase-lock { gap: 8px; padding: 9px 10px; }
+  .golive-lock-icon { width: 26px; height: 26px; }
+  .golive-lock-icon svg { width: 14px; height: 14px; }
 }
