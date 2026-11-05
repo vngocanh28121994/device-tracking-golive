@@ -16,7 +16,7 @@ async function requireReporter() {
   if ("response" in access) return access;
   const db = getDb();
   const [me] = await db.select({ role: userProfiles.role }).from(userProfiles).where(eq(userProfiles.userId, access.user.userId)).limit(1);
-  if (!canViewStatistic(me?.role, access.user.email)) return { response: json({ error: "Màn hình Statistic chỉ dành cho tài khoản có role Manager." }, 403) };
+  if (!canViewStatistic(me?.role)) return { response: json({ error: "Màn hình Statistic chỉ dành cho tài khoản có role Manager." }, 403) };
   return { user: access.user, db };
 }
 
