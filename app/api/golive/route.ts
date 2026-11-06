@@ -9,6 +9,8 @@ import { notifyRoles, notifyUsers, pushEnabled } from "../../lib/push";
 
 type Db = ReturnType<typeof getDb>;
 const MAX_COMPLETED = 10;
+// Drizzle binds 13 values per ticket, including defaults. Keep each statement below D1's 100-parameter limit.
+const TICKET_INSERT_BATCH_SIZE = 5;
 type Profile = { userId: string; displayName: string };
 
 // Managers and PMs follow progress; everyone hears when a phase or the release is finished.
@@ -150,7 +152,7 @@ export async function POST(request: Request) {
       const rows = testers.map((tester, index) => ({ releaseId: id, issueKey: "QE-" + (index + 1), summary: fixVersion, assignee: tester.displayName, assigneeUserId: tester.userId, updatedAt: now }));
       await db.batch([
         db.insert(goliveReleases).values({ id, name, fixVersion, source: "manual", createdBy: profile?.displayName || user.displayName || user.email, createdAt: now }),
-        ...Array.from({ length: Math.ceil(rows.length / 10) }, (_, index) => db.insert(goliveTickets).values(rows.slice(index * 10, index * 10 + 10))),
+        ...Array.from({ length: Math.ceil(rows.length / TICKET_INSERT_BATCH_SIZE) }, (_, index) => db.insert(goliveTickets).values(rows.slice(index * TICKET_INSERT_BATCH_SIZE, (index + 1) * TICKET_INSERT_BATCH_SIZE))),
       ]);
       await loadRelease(db, id, now);
       return Response.json({ releaseId: id, count: testers.length });
@@ -172,7 +174,7 @@ export async function POST(request: Request) {
       // D1 caps bound parameters per statement, so tickets go in chunks of one batch.
       await db.batch([
         db.insert(goliveReleases).values({ id, name, createdBy: profile?.displayName || user.displayName || user.email, createdAt: now }),
-        ...Array.from({ length: Math.ceil(tickets.length / 10) }, (_, index) => db.insert(goliveTickets).values(tickets.slice(index * 10, index * 10 + 10).map(item => ({ ...item, assigneeUserId: item.assignee ? matchAccount(profiles, item.assignee) : null, releaseId: id, updatedAt: now })))),
+        ...Array.from({ length: Math.ceil(tickets.length / TICKET_INSERT_BATCH_SIZE) }, (_, index) => db.insert(goliveTickets).values(tickets.slice(index * TICKET_INSERT_BATCH_SIZE, (index + 1) * TICKET_INSERT_BATCH_SIZE).map(item => ({ ...item, assigneeUserId: item.assignee ? matchAccount(profiles, item.assignee) : null, releaseId: id, updatedAt: now })))),
       ]);
       return Response.json({ releaseId: id, count: tickets.length });
     }
