@@ -887,6 +887,7 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 .stat-phase-chip { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
 .stat-phase-web { background: var(--lavender); color: var(--accent); }
 .stat-phase-app { background: #fff3e2; color: #8a5a17; }
+.stat-phase-build { background: #e6f1fb; color: #1d5a8c; }
 .stat-phase-completed { background: #e9f5ee; color: #28715d; }
 .stat-release-phases { flex: 0 0 170px; display: grid; gap: 8px; }
 .stat-release-phases .stat-release-progress { flex: none; gap: 4px; justify-items: stretch; }
@@ -1000,6 +1001,11 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 .golive-web-done-text { display: grid; gap: 2px; }
 .golive-web-done-text small { color: #3d7363; }
 .golive-web-done .golive-skip-button { margin-left: auto; }
+.golive-web-done .golive-app-remind { margin-left: auto; }
+.golive-web-done .golive-app-remind + .golive-skip-button { margin-left: 0; }
+.golive-push-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.golive-web-done .golive-push-actions { margin-left: auto; }
+.golive-web-done .golive-push-actions + .golive-app-remind { margin-left: 0; }
 @media (max-width: 900px) {
   .golive-web { padding: 14px; }
   .golive-web-sign { margin-left: 0; width: 100%; justify-content: center; }
@@ -1007,6 +1013,8 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
   .golive-web-remind { margin-left: 0; width: 100%; justify-content: center; }
   .golive-web-done { display: grid; grid-template-columns: auto 1fr; align-items: start; }
   .golive-web-done .golive-skip-button { grid-column: 2; justify-self: start; margin-left: 0; }
+  .golive-web-done .golive-app-remind { grid-column: 1 / -1; margin-left: 0; width: 100%; justify-content: center; }
+  .golive-web-done .golive-push-actions { grid-column: 1 / -1; margin-left: 0; }
 }
 
 /* "Không test được": reason, scrum-team status and its dialog */
@@ -1234,6 +1242,7 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 :root[data-theme="dark"] .golive-skip-notified { color: #f3c58f; background: #3a2a18; }
 :root[data-theme="dark"] .golive-skip-notified.is-notified { color: #bae6da; background: #2e4638; }
 :root[data-theme="dark"] .stat-phase-app { background: #3d2e1a; color: #f0c98d; }
+:root[data-theme="dark"] .stat-phase-build { background: #1c3347; color: #a9d2f3; }
 :root[data-theme="dark"] .stat-phase-completed { background: #2e4638; color: #bae6da; }
 :root[data-theme="dark"] .stat-web-done { color: #9fdcc5; }
 :root[data-theme="dark"] .stat-web-pending strong { color: #e5abb0; }

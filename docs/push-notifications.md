@@ -8,7 +8,8 @@ Who gets what:
 | Event | Recipients |
 | --- | --- |
 | A QE confirms the web test | Manager, PM |
-| Every QE confirmed the web test | everyone |
+| Every QE finished the web test | Manager, QEM, App Manager (build the app) |
+| App Manager/Manager taps "Đã push app" | QEs with tickets in the release (start the app test) |
 | Manager taps remind (web phase) | QEs who have not confirmed |
 | A QE's last open ticket/checklist turns Done | Manager, PM |
 | Every ticket of the release is Done | everyone |

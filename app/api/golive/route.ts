@@ -4,7 +4,7 @@ import { getDb } from "../../../db";
 import { devices, goliveDeviceChecks, goliveReleases, goliveTicketDevices, goliveTickets, goliveWebSignoffs, userProfiles } from "../../../db/schema";
 import { inAppPhase, isWebStatus, matchAccount, webProgress } from "../../lib/golive";
 import { waitUntil } from "cloudflare:workers";
-import { accountRoles, isManager, isQe, managerRoles, qeRoles } from "../../lib/roles";
+import { accountRoles, appPushRoles, canPushApp, isManager, isQe, managerRoles, qeRoles } from "../../lib/roles";
 import { notifyRoles, notifyUsers, pushEnabled } from "../../lib/push";
 
 type Db = ReturnType<typeof getDb>;
@@ -83,30 +83,32 @@ async function loadRelease(db: Db, releaseId: string, now = new Date().toISOStri
 const ticketWithRelease = (db: Db, ticketId: number) =>
   db.select({ ticket: goliveTickets, completedAt: goliveReleases.completedAt, releaseName: goliveReleases.name }).from(goliveTickets).innerJoin(goliveReleases, eq(goliveReleases.id, goliveTickets.releaseId)).where(eq(goliveTickets.id, ticketId));
 
-async function webPhase(db: Db, releaseId: string) {
-  if (!releaseId) return { qe: [], signed: {} };
+async function webPhase(db: Db, releaseId: string): Promise<{ qe: { userId: string; displayName: string; role: string }[]; signed: Record<string, string>; appPushedAt: string | null; appPushedBy: string | null }> {
+  if (!releaseId) return { qe: [], signed: {}, appPushedAt: null, appPushedBy: null };
   const [[release], profiles, tickets, signoffs] = await Promise.all([
-    db.select({ source: goliveReleases.source, createdAt: goliveReleases.createdAt }).from(goliveReleases).where(eq(goliveReleases.id, releaseId)),
+    db.select({ source: goliveReleases.source, createdAt: goliveReleases.createdAt, appPushedAt: goliveReleases.appPushedAt, appPushedBy: goliveReleases.appPushedBy }).from(goliveReleases).where(eq(goliveReleases.id, releaseId)),
     db.select({ userId: userProfiles.userId, displayName: userProfiles.displayName, role: userProfiles.role }).from(userProfiles).orderBy(userProfiles.displayName),
     db.select({ assignee: goliveTickets.assignee, assigneeUserId: goliveTickets.assigneeUserId, webStatus: goliveTickets.webStatus, webAt: goliveTickets.webAt }).from(goliveTickets).where(eq(goliveTickets.releaseId, releaseId)),
     db.select().from(goliveWebSignoffs).where(eq(goliveWebSignoffs.releaseId, releaseId)),
   ]);
-  return release ? webProgress(release, profiles, qeRoles, tickets, signoffs) : { qe: [], signed: {} };
+  return release ? { ...webProgress(release, profiles, qeRoles, tickets, signoffs), appPushedAt: release.appPushedAt, appPushedBy: release.appPushedBy } : { qe: [], signed: {}, appPushedAt: null, appPushedBy: null };
 }
 
-// Each phase locks the other's column: web outcomes while the web phase runs, the app checklist after.
-const appPhaseOf = (web: Awaited<ReturnType<typeof webPhase>>) => inAppPhase(web.qe.map(person => person.userId), Object.keys(web.signed));
+// Web outcomes lock once every QE is done with web; the app checklist opens only after the app build is pushed.
+// Between the two the release waits for the build: neither column can be edited.
+const webDoneOf = (web: Awaited<ReturnType<typeof webPhase>>) => inAppPhase(web.qe.map(person => person.userId), Object.keys(web.signed));
+const appPhaseOf = (web: Awaited<ReturnType<typeof webPhase>>) => webDoneOf(web) && !!web.appPushedAt;
 function announceWebProgress(db: Db, releaseName: string, before: Awaited<ReturnType<typeof webPhase>>, after: Awaited<ReturnType<typeof webPhase>>) {
   for (const person of after.qe) {
     if (person.userId in before.signed || !(person.userId in after.signed)) continue;
     waitUntil(notifyRoles(db, WATCHERS, { event: "web-qe-done", title: "QE đã xong test web", body: person.displayName + " đã hoàn thành test web đợt " + releaseName + "." }));
   }
-  if (!appPhaseOf(before) && appPhaseOf(after)) {
-    waitUntil(notifyRoles(db, EVERYONE, { event: "web-all-done", title: "Test web hoàn tất", body: "Tất cả QE đã test xong web đợt " + releaseName + ". Bắt đầu test app." }));
+  if (!webDoneOf(before) && webDoneOf(after)) {
+    waitUntil(notifyRoles(db, appPushRoles, { event: "web-all-done", title: "Test web hoàn tất", body: "Tất cả QE đã test xong web đợt " + releaseName + ". Có thể build và push app." }));
   }
 }
 
-const WEB_PHASE_ONLY = "Đợt golive đang ở giai đoạn 1 · Test web. Phase app sẽ mở khi tất cả QE tham gia hoàn thành test web.";
+const WEB_PHASE_ONLY = "Phase app chưa mở: cần tất cả QE hoàn thành test web và App Manager xác nhận đã push app.";
 const APP_PHASE_ONLY = "Đợt golive đã sang giai đoạn 2 · Test app, không sửa phase web được nữa.";
 
 async function deleteRelease(db: Db, releaseId: string) {
@@ -287,9 +289,8 @@ export async function POST(request: Request) {
       if (!release) return error("Không tìm thấy đợt golive.", 404);
       if (release.completedAt) return error("Đợt golive đã hoàn thành, không thể sửa.", 409);
       if (release.source === "manual") return error("Đợt golive tạo tay không có ticket để cập nhật hàng loạt.", 409);
-      const inApp = appPhaseOf(web);
-      if (phase === "app" && !inApp) return error(WEB_PHASE_ONLY, 409);
-      if (phase === "web" && inApp) return error(APP_PHASE_ONLY, 409);
+      if (phase === "app" && !appPhaseOf(web)) return error(WEB_PHASE_ONLY, 409);
+      if (phase === "web" && webDoneOf(web)) return error(APP_PHASE_ONLY, 409);
       const me = profiles.find(item => item.userId === user.userId);
       const picked = rows.filter(row => ids.includes(row.id));
       const allowed = picked.filter(row => {
@@ -330,7 +331,7 @@ export async function POST(request: Request) {
       if (tester && tester !== user.userId && !isManager(me?.role)) return error("Chỉ người test của ticket hoặc Manager mới được đánh dấu ticket.", 403);
       if (completedAt) return error("Đợt golive đã hoàn thành, không thể sửa.", 409);
       const before = await webPhase(db, ticket.releaseId);
-      if (appPhaseOf(before)) return error(APP_PHASE_ONLY, 409);
+      if (webDoneOf(before)) return error(APP_PHASE_ONLY, 409);
       const by = me?.displayName || user.displayName || user.email;
       const values = status
         ? { webStatus: status, webAt: now, webBy: by, webReason: reason, webNotified: status === "cannot-test" && body.notified === true }
@@ -350,15 +351,42 @@ export async function POST(request: Request) {
       if (release.completedAt) return error("Đợt golive đã hoàn thành, không thể sửa.", 409);
       if (!isQe(me?.role)) return error("Chỉ tài khoản QE mới xác nhận hoàn thành test web.", 403);
       if (release.source !== "manual") return Response.json({ web: await webPhase(db, releaseId) });
+      const before = await webPhase(db, releaseId);
+      if (!done && before.appPushedAt) return error("App đã được push, không thu hồi xác nhận test web được nữa.", 409);
       if (done) await db.insert(goliveWebSignoffs).values({ releaseId, userId: user.userId, signedAt: now }).onConflictDoNothing();
       else await db.delete(goliveWebSignoffs).where(and(eq(goliveWebSignoffs.releaseId, releaseId), eq(goliveWebSignoffs.userId, user.userId)));
       const web = await webPhase(db, releaseId);
-      if (done) {
-        const name = web.qe.find(person => person.userId === user.userId)?.displayName || user.displayName;
-        waitUntil(notifyRoles(db, WATCHERS, { event: "web-qe-done", title: "QE đã xong test web", body: name + " đã xác nhận test web đợt " + release.name + "." }));
-        if (web.qe.every(person => person.userId in web.signed)) waitUntil(notifyRoles(db, EVERYONE, { event: "web-all-done", title: "Test web hoàn tất", body: "Tất cả QE đã test xong web đợt " + release.name + ". Bắt đầu test app." }));
-      }
+      announceWebProgress(db, release.name, before, web);
       return Response.json({ web });
+    }
+    // The App Manager (or a Manager) marks the app build as pushed: the app checklist opens and the testers hear.
+    // again: a rebuilt app replaces the pushed one; ticks and Done stay, the testers are told to install it.
+    // undo: a push tapped by mistake; the release goes back to waiting for the build, ticks are kept.
+    if (body.action === "app-pushed") {
+      const releaseId = clean(body.releaseId, 60), mode = body.undo === true ? "undo" : body.again === true ? "again" : "first";
+      const [[release], [me], web] = await Promise.all([
+        db.select({ completedAt: goliveReleases.completedAt, name: goliveReleases.name }).from(goliveReleases).where(eq(goliveReleases.id, releaseId)),
+        db.select({ role: userProfiles.role, displayName: userProfiles.displayName }).from(userProfiles).where(eq(userProfiles.userId, user.userId)),
+        webPhase(db, releaseId),
+      ]);
+      if (!release) return error("Không tìm thấy đợt golive.", 404);
+      if (release.completedAt) return error("Đợt golive đã hoàn thành, không thể sửa.", 409);
+      if (!canPushApp(me?.role)) return error("Chỉ App Manager hoặc Manager mới xác nhận đã push app.", 403);
+      if (mode === "undo") {
+        if (!web.appPushedAt) return Response.json({ web });
+        await db.update(goliveReleases).set({ appPushedAt: null, appPushedBy: null }).where(eq(goliveReleases.id, releaseId));
+        return Response.json({ web: { ...web, appPushedAt: null, appPushedBy: null } });
+      }
+      if (!webDoneOf(web)) return error("Chưa thể push app: còn QE chưa hoàn thành test web.", 409);
+      // A double tap or a second Manager must not re-announce: only an explicit "again" pushes over a push.
+      if (web.appPushedAt && mode === "first") return Response.json({ web });
+      if (!web.appPushedAt && mode === "again") return error("App chưa được push lần nào.", 409);
+      const by = me?.displayName || user.displayName || user.email;
+      await db.update(goliveReleases).set({ appPushedAt: now, appPushedBy: by }).where(eq(goliveReleases.id, releaseId));
+      waitUntil(notifyUsers(db, web.qe.map(person => person.userId), mode === "again"
+        ? { event: "app-pushed", title: "Có bản app mới", body: by + " đã push bản app mới đợt " + release.name + ". Cài lại bản mới trước khi test tiếp.", link: "/?tab=golive" }
+        : { event: "app-pushed", title: "App đã sẵn sàng để test", body: by + " đã push app đợt " + release.name + ". Bắt đầu test app trên thiết bị của bạn.", link: "/?tab=golive" }));
+      return Response.json({ web: { ...web, appPushedAt: now, appPushedBy: by } });
     }
     if (body.action === "remind-web") {
       const releaseId = clean(body.releaseId, 60);
