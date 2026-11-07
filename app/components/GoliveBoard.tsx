@@ -198,10 +198,11 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
     setBusy(true);
     try {
       const r = await fetch("/api/golive", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "bulk-status", releaseId, phase: appPhase ? "app" : "web", status, reason, notified, ticketIds: ids }) });
-      const result = await r.json() as { error?: string; updated?: number[]; values?: Partial<Ticket>; skipped?: number };
+      const result = await r.json() as { error?: string; updated?: number[]; values?: Partial<Ticket>; skipped?: number; web?: WebPhase };
       if (!r.ok) throw new Error(result.error || "Không thể cập nhật ticket.");
       const updated = result.updated || [];
       setTickets(current => current.map(item => updated.includes(item.id) ? { ...item, ...result.values } : item));
+      if (result.web) setWeb(result.web);
       setPicked([]);
       onToast("Đã đánh dấu " + updated.length + " ticket " + BULK_LABEL[status] + " ở " + phaseName + (result.skipped ? " (bỏ qua " + result.skipped + " ticket không có quyền)" : ""));
       return true;
@@ -217,6 +218,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
     try {
       const result = await post({ action: "web-status", ticketId: ticket.id, status, reason, notified });
       setTickets(current => current.map(item => item.id === ticket.id ? { ...item, webStatus: result.webStatus ?? null, webAt: result.webAt ?? null, webBy: result.webBy ?? null, webReason: result.webReason ?? "", webNotified: !!result.webNotified } : item));
+      if (result.web) setWeb(result.web);
       onToast(status ? "Đã đánh dấu " + ticket.issueKey + " " + WEB_TOAST[status] : "Đã thu hồi trạng thái phase web của " + ticket.issueKey);
       return true;
     } catch (e) { onError(e instanceof Error ? e.message : "Không thể cập nhật ticket."); return false; } finally { setBusy(false); }
@@ -407,19 +409,19 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
   const webPanel = web.qe.length === 0
     ? <section className="golive-web panel"><div className="golive-web-head"><span className="golive-web-step"><Globe size={16} /> Giai đoạn 1 · Test web</span></div><p className="golive-web-note">Chưa có tài khoản QE nào để theo dõi test web.</p>{isManager(me?.role) && <button type="button" className="outline-button" onClick={onManageRoles}>Gán role QE</button>}</section>
     : webDone
-      ? <section className="golive-web golive-web-done" role="status"><CheckCircle2 size={22} aria-hidden="true" /><div className="golive-web-done-text"><strong>Quá trình test web đã hoàn tất, có thể build app.</strong><small>{web.qe.length}/{web.qe.length} QE đã xác nhận · Giai đoạn 2: test app theo checklist thiết bị bên dưới.</small></div>{running && iSignedWeb && <button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => void signWeb(false)}><Undo2 size={14} /> Thu hồi</button>}</section>
+      ? <section className="golive-web golive-web-done" role="status"><CheckCircle2 size={22} aria-hidden="true" /><div className="golive-web-done-text"><strong>Quá trình test web đã hoàn tất, có thể build app.</strong><small>{web.qe.length}/{web.qe.length} QE đã hoàn thành · Giai đoạn 2: test app theo checklist thiết bị bên dưới.</small></div>{manual && running && iSignedWeb && <button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => void signWeb(false)}><Undo2 size={14} /> Thu hồi</button>}</section>
       : <section className="golive-web panel">
         <div className="golive-web-head">
           <span className="golive-web-step"><Globe size={16} /> Giai đoạn 1 · Test web</span>
           <span className="golive-web-count"><strong>{webSigned.length}/{web.qe.length}</strong> QE đã test web xong</span>
-          {running && iAmQe && (iSignedWeb
+          {manual && running && iAmQe && (iSignedWeb
             ? <span className="golive-web-mine"><Check size={15} /> Bạn đã xác nhận <button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => void signWeb(false)}><Undo2 size={14} /> Thu hồi</button></span>
-            : <button type="button" className="primary-button golive-web-sign" disabled={busy || myWebOpen > 0} title={myWebOpen ? "Còn " + myWebOpen + " ticket của bạn chưa có trạng thái phase web" : ""} onClick={() => void signWeb(true)}><CheckCircle2 size={17} /> Đã hoàn thành test web</button>)}
+            : <button type="button" className="primary-button golive-web-sign" disabled={busy} onClick={() => void signWeb(true)}><CheckCircle2 size={17} /> Đã hoàn thành test web</button>)}
         </div>
-        {!manual && <p className="golive-web-note">Chọn trạng thái ở cột <strong>Phase web</strong> cho từng ticket, rồi bấm “Đã hoàn thành test web”. Cột Phase app mở khi tất cả QE đã xác nhận.{running && iAmQe && !iSignedWeb && myWebOpen > 0 && <> Bạn còn <strong>{myWebOpen}</strong> ticket chưa có trạng thái phase web (hoặc đang Test failed).</>}</p>}
+        {!manual && <p className="golive-web-note">Hệ thống tự ghi nhận khi bạn hoàn thành các ticket ở cột <strong>Phase web</strong>. Phase app mở khi tất cả QE tham gia đã hoàn thành.{running && iAmQe && !iSignedWeb && myWebOpen > 0 && <> Bạn còn <strong>{myWebOpen}</strong> ticket chưa có trạng thái phase web (hoặc đang Test failed).</>}</p>}
         <div className="golive-web-bar" role="progressbar" aria-label="Tiến trình test web" aria-valuemin={0} aria-valuemax={web.qe.length} aria-valuenow={webSigned.length}><span style={{ width: (webSigned.length / web.qe.length * 100) + "%" }} /></div>
         <div className="golive-web-pending">
-          <span className="golive-web-label">Chưa xác nhận ({webPending.length})</span>
+          <span className="golive-web-label">{manual ? "Chưa xác nhận" : "Chưa hoàn thành"} ({webPending.length})</span>
           <ul>{webPending.map(person => <li key={person.userId}><HolderIdentity name={person.displayName} avatar={people.find(item => item.userId === person.userId)?.avatar} /></li>)}</ul>
           {running && isManager(me?.role) && <button type="button" className="outline-button golive-web-remind" disabled={busy} onClick={() => void remindWeb()}><Bell size={15} /> Nhắc nhở</button>}
         </div>

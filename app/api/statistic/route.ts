@@ -3,8 +3,8 @@ import { waitUntil } from "cloudflare:workers";
 import { requireMember } from "../../lib/member-access";
 import { getDb } from "../../../db";
 import { goliveDeviceChecks, goliveReleases, goliveTickets, goliveWebSignoffs, userProfiles } from "../../../db/schema";
-import { canViewStatistic, isQe, qeRoles } from "../../lib/roles";
-import { matchAccount } from "../../lib/golive";
+import { canViewStatistic, qeRoles } from "../../lib/roles";
+import { matchAccount, webProgress } from "../../lib/golive";
 import { notifyUsers, pushEnabled } from "../../lib/push";
 import { untestedNotices, webRoster, webSummary } from "../../lib/statistic";
 
@@ -30,7 +30,7 @@ export async function GET(request: Request) {
     const releaseId = new URL(request.url).searchParams.get("release") || "";
     if (releaseId) {
       // One round trip each: the tickets, how many devices each one has ticked so far, and the web sign-offs.
-      const [rows, ticks, profiles, signoffs] = await Promise.all([
+      const [rows, ticks, profiles, signoffs, [release]] = await Promise.all([
         db.select().from(goliveTickets).where(eq(goliveTickets.releaseId, releaseId)).orderBy(goliveTickets.id),
         db.select({
           ticketId: goliveDeviceChecks.ticketId,
@@ -42,8 +42,10 @@ export async function GET(request: Request) {
           .groupBy(goliveDeviceChecks.ticketId),
         db.select({ userId: userProfiles.userId, displayName: userProfiles.displayName, role: userProfiles.role }).from(userProfiles),
         db.select({ userId: goliveWebSignoffs.userId, signedAt: goliveWebSignoffs.signedAt }).from(goliveWebSignoffs).where(eq(goliveWebSignoffs.releaseId, releaseId)),
+        db.select({ source: goliveReleases.source, createdAt: goliveReleases.createdAt }).from(goliveReleases).where(eq(goliveReleases.id, releaseId)),
       ]);
-      const web = webRoster(profiles.filter(person => isQe(person.role)), signoffs);
+      const progress = webProgress(release ?? { source: "manual", createdAt: "" }, profiles, qeRoles, rows, signoffs);
+      const web = webRoster(progress.qe, Object.entries(progress.signed).map(([userId, signedAt]) => ({ userId, signedAt })));
       const tickets = rows.map(ticket => {
         const tick = ticks.find(item => item.ticketId === ticket.id);
         return {
@@ -58,7 +60,7 @@ export async function GET(request: Request) {
       });
       return json({ releaseId, tickets, web });
     }
-    const [rows, counts, qe, signoffs] = await Promise.all([
+    const [rows, counts, profiles, signoffs, webTickets] = await Promise.all([
       db.select().from(goliveReleases).orderBy(desc(goliveReleases.createdAt)),
       db.select({
         releaseId: goliveTickets.releaseId,
@@ -66,13 +68,14 @@ export async function GET(request: Request) {
         done: sql<number>`sum(case when ${goliveTickets.doneAt} is null then 0 else 1 end)`,
         failed: sql<number>`sum(case when ${goliveTickets.failedAt} is null then 0 else 1 end)`,
       }).from(goliveTickets).groupBy(goliveTickets.releaseId),
-      db.select({ userId: userProfiles.userId }).from(userProfiles).where(inArray(userProfiles.role, qeRoles)),
-      db.select({ releaseId: goliveWebSignoffs.releaseId, userId: goliveWebSignoffs.userId }).from(goliveWebSignoffs),
+      db.select({ userId: userProfiles.userId, displayName: userProfiles.displayName, role: userProfiles.role }).from(userProfiles),
+      db.select({ releaseId: goliveWebSignoffs.releaseId, userId: goliveWebSignoffs.userId, signedAt: goliveWebSignoffs.signedAt }).from(goliveWebSignoffs),
+      db.select({ releaseId: goliveTickets.releaseId, assignee: goliveTickets.assignee, assigneeUserId: goliveTickets.assigneeUserId, webStatus: goliveTickets.webStatus, webAt: goliveTickets.webAt }).from(goliveTickets),
     ]);
-    const qeIds = qe.map(person => person.userId);
     const releases = rows.map(release => {
       const count = counts.find(item => item.releaseId === release.id);
-      const web = webSummary(qeIds, signoffs.filter(row => row.releaseId === release.id).map(row => row.userId));
+      const progress = webProgress(release, profiles, qeRoles, webTickets.filter(ticket => ticket.releaseId === release.id), signoffs.filter(row => row.releaseId === release.id));
+      const web = webSummary(progress.qe.map(person => person.userId), Object.keys(progress.signed));
       return { ...release, total: count?.total ?? 0, done: Number(count?.done ?? 0), failed: Number(count?.failed ?? 0), web };
     });
     return json({ releases });

@@ -87,7 +87,7 @@ export function StatisticBoard({ people, currentUserId, onToast, onError }: { pe
       const r = await fetch("/api/golive", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "remind-web", releaseId }) });
       const data = await r.json() as { pending?: number; error?: string };
       if (!r.ok) throw new Error(data.error || "Không thể gửi nhắc nhở.");
-      onToast("Đã gửi nhắc nhở tới " + data.pending + " QE chưa xác nhận test web 🔔");
+      onToast("Đã gửi nhắc nhở tới " + data.pending + " QE chưa hoàn thành test web 🔔");
     } catch (e) { onError(e instanceof Error ? e.message : "Không thể gửi nhắc nhở."); }
     finally { setSending(""); }
   }
@@ -148,7 +148,7 @@ export function StatisticBoard({ people, currentUserId, onToast, onError }: { pe
   </>;
 
   return <>
-    <div className="page-heading"><div><h1>Statistic.</h1><p>Mỗi đợt golive đi qua 2 giai đoạn như màn Tracking Golive: giai đoạn 1 QE xác nhận test web, giai đoạn 2 test app trên thiết bị. Ticket đã done ghi lại thời điểm QE đánh dấu; ticket chưa done có thể chọn để theo dõi riêng.</p></div></div>
+    <div className="page-heading"><div><h1>Statistic.</h1><p>Mỗi đợt golive đi qua 2 giai đoạn như màn Tracking Golive: giai đoạn 1 QE hoàn thành test web, giai đoạn 2 test app trên thiết bị. Ticket đã done ghi lại thời điểm QE đánh dấu; ticket chưa done có thể chọn để theo dõi riêng.</p></div></div>
     {releases.length === 0 ? <section className="panel golive-empty"><Rocket size={34} /><h2>Chưa có đợt golive nào</h2><p>Tạo hoặc import một đợt golive ở màn Tracking Golive, số liệu sẽ hiện ở đây.</p></section> : <>
       <div className="golive-stats stat-summary">
         <div className="golive-stat"><span className="status-chip">Đợt golive</span><strong>{totals.releases}</strong><small>{totals.running} đang thực hiện{totals.running > 0 && " · " + totals.onWeb + " test web, " + (totals.running - totals.onWeb) + " test app"}</small></div>
@@ -220,15 +220,15 @@ export function StatisticBoard({ people, currentUserId, onToast, onError }: { pe
                   <button type="button" className="stat-section-toggle" aria-expanded={webOpen} aria-controls={"stat-web-" + release.id}
                     onClick={() => toggle(release.id, setCollapsedWeb)}>
                     <span className="stat-phase-title"><Globe size={14} aria-hidden="true" /> Giai đoạn 1 · Test web</span>
-                    <small>{!manual && tickets.length > 0 && webTicketsDone + "/" + tickets.length + " ticket · "}{roster.length ? roster.length - webPending.length + "/" + roster.length + " QE đã xác nhận" : "Chưa có QE"}</small>
+                    <small>{!manual && tickets.length > 0 && webTicketsDone + "/" + tickets.length + " ticket · "}{roster.length ? roster.length - webPending.length + "/" + roster.length + " QE đã hoàn thành" : "Chưa có QE"}</small>
                     <ChevronDown size={15} aria-hidden="true" />
                   </button>
                   {webOpen && <div id={"stat-web-" + release.id} className="stat-phase-body">
                     {roster.length === 0 ? <p className="stat-web-note">Chưa có tài khoản role QE nào để theo dõi test web.</p> : <>
                       {webPending.length === 0
-                        ? <p className="stat-web-done" role="status"><CheckCircle2 size={16} aria-hidden="true" /> Tất cả QE đã xác nhận test web{phase === "app" ? ", đang test app ở giai đoạn 2." : "."}</p>
+                        ? <p className="stat-web-done" role="status"><CheckCircle2 size={16} aria-hidden="true" /> Tất cả QE tham gia đã hoàn thành test web{phase === "app" ? ", đang test app ở giai đoạn 2." : "."}</p>
                         : <div className="stat-web-pending">
-                          <span>Còn <strong>{webPending.length}</strong> QE chưa xác nhận hoàn thành test web: {webPending.map(person => person.displayName).join(", ")}{phase === "web" ? ". Giai đoạn test app chưa bắt đầu." : "."}</span>
+                          <span>Còn <strong>{webPending.length}</strong> QE chưa hoàn thành test web: {webPending.map(person => person.displayName).join(", ")}{phase === "web" ? ". Giai đoạn test app chưa bắt đầu." : "."}</span>
                           {!release.completedAt && isManager && <button type="button" className="outline-button stat-clear" disabled={sending === "web:" + release.id}
                             onClick={() => void remindWeb(release.id)}><Bell size={15} /> {sending === "web:" + release.id ? "Đang gửi..." : "Nhắc nhở"}</button>}
                         </div>}

@@ -2,7 +2,7 @@ import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { requireMember } from "../../lib/member-access";
 import { getDb } from "../../../db";
 import { devices, goliveDeviceChecks, goliveReleases, goliveTicketDevices, goliveTickets, goliveWebSignoffs, userProfiles } from "../../../db/schema";
-import { inAppPhase, isWebStatus, matchAccount, webSettled } from "../../lib/golive";
+import { inAppPhase, isWebStatus, matchAccount, webProgress } from "../../lib/golive";
 import { waitUntil } from "cloudflare:workers";
 import { accountRoles, isManager, isQe, managerRoles, qeRoles } from "../../lib/roles";
 import { notifyRoles, notifyUsers, pushEnabled } from "../../lib/push";
@@ -83,20 +83,30 @@ async function loadRelease(db: Db, releaseId: string, now = new Date().toISOStri
 const ticketWithRelease = (db: Db, ticketId: number) =>
   db.select({ ticket: goliveTickets, completedAt: goliveReleases.completedAt, releaseName: goliveReleases.name }).from(goliveTickets).innerJoin(goliveReleases, eq(goliveReleases.id, goliveTickets.releaseId)).where(eq(goliveTickets.id, ticketId));
 
-// Web phase: every account with role QE confirms the web build before the app build starts.
-// Progress counts today's QE accounts, so a sign-off from someone no longer QE is not counted.
 async function webPhase(db: Db, releaseId: string) {
   if (!releaseId) return { qe: [], signed: {} };
-  const [qe, rows] = await Promise.all([
-    db.select({ userId: userProfiles.userId, displayName: userProfiles.displayName }).from(userProfiles).where(inArray(userProfiles.role, qeRoles)).orderBy(userProfiles.displayName),
+  const [[release], profiles, tickets, signoffs] = await Promise.all([
+    db.select({ source: goliveReleases.source, createdAt: goliveReleases.createdAt }).from(goliveReleases).where(eq(goliveReleases.id, releaseId)),
+    db.select({ userId: userProfiles.userId, displayName: userProfiles.displayName, role: userProfiles.role }).from(userProfiles).orderBy(userProfiles.displayName),
+    db.select({ assignee: goliveTickets.assignee, assigneeUserId: goliveTickets.assigneeUserId, webStatus: goliveTickets.webStatus, webAt: goliveTickets.webAt }).from(goliveTickets).where(eq(goliveTickets.releaseId, releaseId)),
     db.select().from(goliveWebSignoffs).where(eq(goliveWebSignoffs.releaseId, releaseId)),
   ]);
-  return { qe, signed: Object.fromEntries(rows.map(row => [row.userId, row.signedAt])) };
+  return release ? webProgress(release, profiles, qeRoles, tickets, signoffs) : { qe: [], signed: {} };
 }
 
 // Each phase locks the other's column: web outcomes while the web phase runs, the app checklist after.
 const appPhaseOf = (web: Awaited<ReturnType<typeof webPhase>>) => inAppPhase(web.qe.map(person => person.userId), Object.keys(web.signed));
-const WEB_PHASE_ONLY = "Đợt golive đang ở giai đoạn 1 · Test web. Phase app sẽ mở khi tất cả QE xác nhận hoàn thành test web.";
+function announceWebProgress(db: Db, releaseName: string, before: Awaited<ReturnType<typeof webPhase>>, after: Awaited<ReturnType<typeof webPhase>>) {
+  for (const person of after.qe) {
+    if (person.userId in before.signed || !(person.userId in after.signed)) continue;
+    waitUntil(notifyRoles(db, WATCHERS, { event: "web-qe-done", title: "QE đã xong test web", body: person.displayName + " đã hoàn thành test web đợt " + releaseName + "." }));
+  }
+  if (!appPhaseOf(before) && appPhaseOf(after)) {
+    waitUntil(notifyRoles(db, EVERYONE, { event: "web-all-done", title: "Test web hoàn tất", body: "Tất cả QE đã test xong web đợt " + releaseName + ". Bắt đầu test app." }));
+  }
+}
+
+const WEB_PHASE_ONLY = "Đợt golive đang ở giai đoạn 1 · Test web. Phase app sẽ mở khi tất cả QE tham gia hoàn thành test web.";
 const APP_PHASE_ONLY = "Đợt golive đã sang giai đoạn 2 · Test app, không sửa phase web được nữa.";
 
 async function deleteRelease(db: Db, releaseId: string) {
@@ -299,7 +309,9 @@ export async function POST(request: Request) {
       for (let i = 0; i < allowedIds.length; i += 90) writes.push(db.update(goliveTickets).set(values).where(inArray(goliveTickets.id, allowedIds.slice(i, i + 90))));
       await db.batch(writes as [typeof writes[number], ...typeof writes]);
       if (phase === "app" && status !== "failed") waitUntil(announceDone(db, releaseId, release.name, allowed));
-      return Response.json({ updated: allowedIds, values, skipped: picked.length - allowed.length, missing: ids.length - picked.length });
+      const updatedWeb = phase === "web" ? await webPhase(db, releaseId) : undefined;
+      if (updatedWeb) announceWebProgress(db, release.name, web, updatedWeb);
+      return Response.json({ updated: allowedIds, values, web: updatedWeb, skipped: picked.length - allowed.length, missing: ids.length - picked.length });
     }
     if (body.action === "web-status") {
       const ticketId = Number(body.ticketId), status = body.status === null ? null : isWebStatus(body.status) ? body.status : undefined;
@@ -312,18 +324,21 @@ export async function POST(request: Request) {
         db.select({ userId: userProfiles.userId, displayName: userProfiles.displayName, role: userProfiles.role }).from(userProfiles),
       ]);
       if (!found) return error("Không tìm thấy ticket.", 404);
-      const { ticket, completedAt } = found;
+      const { ticket, completedAt, releaseName } = found;
       const me = profiles.find(item => item.userId === user.userId);
       const tester = ticket.assigneeUserId ?? (ticket.assignee ? matchAccount(profiles, ticket.assignee) : null);
       if (tester && tester !== user.userId && !isManager(me?.role)) return error("Chỉ người test của ticket hoặc Manager mới được đánh dấu ticket.", 403);
       if (completedAt) return error("Đợt golive đã hoàn thành, không thể sửa.", 409);
-      if (appPhaseOf(await webPhase(db, ticket.releaseId))) return error(APP_PHASE_ONLY, 409);
+      const before = await webPhase(db, ticket.releaseId);
+      if (appPhaseOf(before)) return error(APP_PHASE_ONLY, 409);
       const by = me?.displayName || user.displayName || user.email;
       const values = status
         ? { webStatus: status, webAt: now, webBy: by, webReason: reason, webNotified: status === "cannot-test" && body.notified === true }
         : { webStatus: null, webAt: null, webBy: null, webReason: "", webNotified: false };
       await db.update(goliveTickets).set(values).where(eq(goliveTickets.id, ticketId));
-      return Response.json(values);
+      const web = await webPhase(db, ticket.releaseId);
+      announceWebProgress(db, releaseName, before, web);
+      return Response.json({ ...values, web });
     }
     if (body.action === "web-signoff") {
       const releaseId = clean(body.releaseId, 60), done = body.done !== false;
@@ -334,16 +349,7 @@ export async function POST(request: Request) {
       if (!release) return error("Không tìm thấy đợt golive.", 404);
       if (release.completedAt) return error("Đợt golive đã hoàn thành, không thể sửa.", 409);
       if (!isQe(me?.role)) return error("Chỉ tài khoản QE mới xác nhận hoàn thành test web.", 403);
-      if (done) {
-        // Every ticket of this QE needs a settled web outcome first, so the web column is never left blank.
-        const [rows, profiles] = await Promise.all([
-          db.select({ issueKey: goliveTickets.issueKey, assignee: goliveTickets.assignee, assigneeUserId: goliveTickets.assigneeUserId, webStatus: goliveTickets.webStatus, summary: goliveTickets.summary }).from(goliveTickets).where(eq(goliveTickets.releaseId, releaseId)),
-          db.select({ userId: userProfiles.userId, displayName: userProfiles.displayName }).from(userProfiles),
-        ]);
-        // A manual golive has one row per QE, so the sign-off itself is that row's web outcome.
-        const open = release.source === "manual" ? [] : rows.filter(row => (row.assigneeUserId ?? (row.assignee ? matchAccount(profiles, row.assignee) : null)) === user.userId && !webSettled(row.webStatus));
-        if (open.length) return Response.json({ error: "Còn " + open.length + " ticket của bạn chưa có trạng thái phase web (hoặc đang Test failed): " + open.slice(0, 5).map(row => row.issueKey).join(", ") + (open.length > 5 ? "…" : "") + ".", unfinished: open.map(row => ({ issueKey: row.issueKey, summary: row.summary, assignee: row.assignee })) }, { status: 409 });
-      }
+      if (release.source !== "manual") return Response.json({ web: await webPhase(db, releaseId) });
       if (done) await db.insert(goliveWebSignoffs).values({ releaseId, userId: user.userId, signedAt: now }).onConflictDoNothing();
       else await db.delete(goliveWebSignoffs).where(and(eq(goliveWebSignoffs.releaseId, releaseId), eq(goliveWebSignoffs.userId, user.userId)));
       const web = await webPhase(db, releaseId);
@@ -365,7 +371,7 @@ export async function POST(request: Request) {
       if (!release) return error("Không tìm thấy đợt golive.", 404);
       const pending = web.qe.filter(person => !(person.userId in web.signed)).map(person => person.userId);
       if (!await pushEnabled(db, "remind-web")) return error("Nhắc nhở qua thông báo đang bị tắt trong cài đặt.", 409);
-      waitUntil(notifyUsers(db, pending, { event: "remind-web", title: "Nhắc test web", body: "Bạn chưa xác nhận test web đợt " + release.name + "." }));
+      waitUntil(notifyUsers(db, pending, { event: "remind-web", title: "Nhắc test web", body: "Bạn chưa hoàn thành test web đợt " + release.name + "." }));
       return Response.json({ pending: pending.length });
     }
     if (body.action === "complete-release") {

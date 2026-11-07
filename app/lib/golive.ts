@@ -70,3 +70,37 @@ export const isWebStatus = (value: unknown): value is WebStatus => WEB_STATUSES.
 export const webSettled = (status: string | null | undefined) => isWebStatus(status) && status !== "failed";
 // The release is in the app phase once every QE confirmed the web test (and stays there once completed).
 export const inAppPhase = (qeIds: string[], signedIds: string[]) => qeIds.length > 0 && qeIds.every(id => signedIds.includes(id));
+
+type WebPerson = { userId: string; displayName: string; role: string };
+type WebTicket = { assignee: string; assigneeUserId: string | null; webStatus: string | null; webAt: string | null };
+
+export function webProgress(
+  release: { source: string; createdAt: string },
+  profiles: WebPerson[],
+  qeRoles: string[],
+  tickets: WebTicket[],
+  signoffs: { userId: string; signedAt: string }[],
+) {
+  const qe = profiles.filter(person => qeRoles.includes(person.role));
+  const legacySigned = Object.fromEntries(signoffs.map(row => [row.userId, row.signedAt]));
+  if (release.source === "manual" || inAppPhase(qe.map(person => person.userId), Object.keys(legacySigned))) {
+    return { qe, signed: legacySigned };
+  }
+  const byTester = new Map<string, WebTicket[]>();
+  for (const ticket of tickets) {
+    const userId = ticket.assigneeUserId ?? matchAccount(profiles, ticket.assignee);
+    if (!userId) continue;
+    const owned = byTester.get(userId) ?? [];
+    owned.push(ticket);
+    byTester.set(userId, owned);
+  }
+  const participants = qe.filter(person => byTester.has(person.userId));
+  const signed: Record<string, string> = {};
+  for (const { userId } of participants) {
+    const owned = byTester.get(userId)!;
+    if (owned.every(ticket => webSettled(ticket.webStatus))) {
+      signed[userId] = owned.reduce((latest, ticket) => ticket.webAt && ticket.webAt > latest ? ticket.webAt : latest, release.createdAt);
+    }
+  }
+  return { qe: participants, signed };
+}

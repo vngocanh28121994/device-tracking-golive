@@ -166,3 +166,31 @@ console.log("Statistic test-failed: outstanding rather than Done, and its own ma
   assert.equal(isWebStatus("web_status"), false);
   console.log("Golive web outcomes: unknown values read as untested.");
 }
+
+{
+  const { inAppPhase, webProgress } = await import("../app/lib/golive.ts");
+  const release = { source: "csv", createdAt: "2026-11-07T01:00:00Z" };
+  const profiles = [
+    { userId: "a", displayName: "An", role: "QE" },
+    { userId: "b", displayName: "Bình", role: "QEM" },
+    { userId: "c", displayName: "Chi", role: "QE" },
+  ];
+  const webAt = "2026-11-07T02:00:00Z";
+  const tickets = [
+    ...Array.from({ length: 5 }, () => ({ assignee: "An", assigneeUserId: "a", webStatus: "tested", webAt })),
+    { assignee: "Bình", assigneeUserId: null, webStatus: "failed", webAt },
+  ];
+  tickets[4].webStatus = "failed";
+  let progress = webProgress(release, profiles, ["QE", "QEM"], tickets, []);
+  assert.deepEqual(progress.qe.map(person => person.userId), ["a", "b"]);
+  assert.deepEqual(progress.signed, {});
+  tickets[4].webStatus = "tested";
+  progress = webProgress(release, profiles, ["QE", "QEM"], tickets, []);
+  assert.deepEqual(progress.signed, { a: webAt });
+  assert.equal(inAppPhase(["a", "b"], Object.keys(progress.signed)), false);
+  tickets[5].webStatus = "not-needed";
+  progress = webProgress(release, profiles, ["QE", "QEM"], tickets, []);
+  assert.equal(inAppPhase(["a", "b"], Object.keys(progress.signed)), true);
+  const manual = webProgress({ ...release, source: "manual" }, profiles, ["QE", "QEM"], tickets, [{ userId: "b", signedAt: webAt }]);
+  assert.deepEqual(manual.signed, { b: webAt });
+}
