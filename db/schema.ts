@@ -78,6 +78,9 @@ export const goliveReleases = sqliteTable("golive_releases", {
   createdAt: text("created_at").notNull(),
   completedAt: text("completed_at"),
   completedBy: text("completed_by"),
+  // Set when an App Manager/Manager marks the app build as pushed; the app checklist opens only then.
+  appPushedAt: text("app_pushed_at"),
+  appPushedBy: text("app_pushed_by"),
 });
 
 export const goliveTickets = sqliteTable("golive_tickets", {

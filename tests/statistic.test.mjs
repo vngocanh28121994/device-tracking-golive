@@ -137,6 +137,8 @@ console.log("Statistic test-failed: outstanding rather than Done, and its own ma
   assert.equal(roster[0].signedAt, null);
   assert.equal(phaseOf({ completedAt: null, web: { total: 2, signed: 1, done: false } }), "web");
   assert.equal(phaseOf({ completedAt: null, web: { total: 2, signed: 2, done: true } }), "app");
+  assert.equal(phaseOf({ completedAt: null, appPushedAt: null, web: { total: 2, signed: 2, done: true } }), "build");
+  assert.equal(phaseOf({ completedAt: null, appPushedAt: "2026-11-03T00:00:00.000Z", web: { total: 2, signed: 2, done: true } }), "app");
   assert.equal(phaseOf({ completedAt: "2026-11-03T00:00:00.000Z", web: { total: 2, signed: 1, done: false } }), "completed");
 }
 

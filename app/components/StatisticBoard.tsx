@@ -6,7 +6,7 @@ import { LoadingState } from "./LoadingState";
 import { isManager as isManagerRole } from "../lib/roles";
 import { doneKindOf, markedAt, markedBy, markedHow, phaseOf, tallyByTester, tallyWebByTester, webKindOf, WebQe, WebSummary } from "../lib/statistic";
 
-type Release = { id: string; name: string; source: string; fixVersion: string; createdBy: string; createdAt: string; completedAt: string | null; completedBy: string | null; total: number; done: number; failed: number; web: WebSummary };
+type Release = { id: string; name: string; source: string; fixVersion: string; createdBy: string; createdAt: string; completedAt: string | null; completedBy: string | null; appPushedAt: string | null; total: number; done: number; failed: number; web: WebSummary };
 type Ticket = { id: number; issueKey: string; summary: string; assignee: string; assigneeUserId: string | null; doneAt: string | null; skippedAt: string | null; skippedBy: string | null; skipKind: string; testedDevices: number; lastCheckedAt: string | null; failedAt: string | null; failedBy: string | null; failedReason: string; webStatus: string | null; webAt: string | null; webBy: string | null; webReason: string };
 type Person = { userId: string; displayName: string; avatar: string; role?: string };
 // The hovered slice of a tester's bar, with the very tickets it stands for.
@@ -44,7 +44,7 @@ const WEB_PARTS = [
 const WEB_LABEL = { tested: "Đã test xong", notNeeded: "Không cần test", cannotTest: "Không test được", failed: "Test failed", open: "Chưa test" } as const;
 const webChip = (kind: keyof typeof WEB_LABEL) => "status-chip " + (kind === "failed" ? "status-failed" : kind === "open" ? "status-blocked" : "status-done");
 // The same two phases as the Tracking Golive board: QE confirm the web build, then test the app on devices.
-const PHASE_LABEL = { web: "Giai đoạn 1 · Test web", app: "Giai đoạn 2 · Test app", completed: "Hoàn thành" } as const;
+const PHASE_LABEL = { web: "Giai đoạn 1 · Test web", build: "Chờ build app", app: "Giai đoạn 2 · Test app", completed: "Hoàn thành" } as const;
 const NO_WEB: WebSummary = { total: 0, signed: 0, done: false };
 
 export function StatisticBoard({ people, currentUserId, onToast, onError }: { people: Person[]; currentUserId: string; onToast: (message: string) => void; onError: (message: string) => void }) {
@@ -199,7 +199,7 @@ export function StatisticBoard({ people, currentUserId, onToast, onError }: { pe
               <small>{release.completedAt ? "Hoàn thành " + prettyStamp(release.completedAt) + (release.completedBy ? " · " + release.completedBy : "") : "Đang thực hiện · tạo " + prettyDate(release.createdAt) + " · " + release.createdBy}</small>
             </span>
             {release.fixVersion && <span className="golive-version">fixVersion: <strong>{release.fixVersion}</strong></span>}
-            <span className={"stat-phase-chip stat-phase-" + phase}>{phase === "web" ? <Globe size={13} /> : phase === "app" ? <Smartphone size={13} /> : <CheckCircle2 size={13} />} {PHASE_LABEL[phase]}</span>
+            <span className={"stat-phase-chip stat-phase-" + phase}>{phase === "web" ? <Globe size={13} /> : phase === "build" ? <Rocket size={13} /> : phase === "app" ? <Smartphone size={13} /> : <CheckCircle2 size={13} />} {PHASE_LABEL[phase]}</span>
             <span className="stat-release-phases">
               <span className="stat-release-progress" title="Giai đoạn 1 · Test web">
                 <small><Globe size={12} aria-hidden="true" /> Web · {release.web.total ? release.web.signed + "/" + release.web.total + " QE" : "chưa có QE"}</small>
@@ -226,7 +226,7 @@ export function StatisticBoard({ people, currentUserId, onToast, onError }: { pe
                   {webOpen && <div id={"stat-web-" + release.id} className="stat-phase-body">
                     {roster.length === 0 ? <p className="stat-web-note">Chưa có tài khoản role QE nào để theo dõi test web.</p> : <>
                       {webPending.length === 0
-                        ? <p className="stat-web-done" role="status"><CheckCircle2 size={16} aria-hidden="true" /> Tất cả QE tham gia đã hoàn thành test web{phase === "app" ? ", đang test app ở giai đoạn 2." : "."}</p>
+                        ? <p className="stat-web-done" role="status"><CheckCircle2 size={16} aria-hidden="true" /> Tất cả QE tham gia đã hoàn thành test web{phase === "app" ? ", đang test app ở giai đoạn 2." : phase === "build" ? ", đang chờ App Manager push app." : "."}</p>
                         : <div className="stat-web-pending">
                           <span>Còn <strong>{webPending.length}</strong> QE chưa hoàn thành test web: {webPending.map(person => person.displayName).join(", ")}{phase === "web" ? ". Giai đoạn test app chưa bắt đầu." : "."}</span>
                           {!release.completedAt && isManager && <button type="button" className="outline-button stat-clear" disabled={sending === "web:" + release.id}

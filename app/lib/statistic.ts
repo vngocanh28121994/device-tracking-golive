@@ -101,9 +101,10 @@ export function webSummary(qeIds: string[], signedIds: string[]): WebSummary {
 }
 
 // Which phase a golive is in: a finished golive is done, otherwise web until every QE confirmed it.
-export type GolivePhase = "web" | "app" | "completed";
-export const phaseOf = (release: { completedAt: string | null; web: WebSummary }): GolivePhase =>
-  release.completedAt ? "completed" : release.web.done ? "app" : "web";
+// "build": web is done and the release waits for the App Manager to push the app build.
+export type GolivePhase = "web" | "build" | "app" | "completed";
+export const phaseOf = (release: { completedAt: string | null; appPushedAt?: string | null; web: WebSummary }): GolivePhase =>
+  release.completedAt ? "completed" : !release.web.done ? "web" : release.appPushedAt === null ? "build" : "app";
 
 // Phase web per tester: the same four outcomes the app phase has, picked directly on each ticket.
 export type WebKind = "tested" | "notNeeded" | "cannotTest" | "failed" | "open";
