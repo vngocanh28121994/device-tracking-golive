@@ -67,29 +67,49 @@ export const WEB_STATUSES = ["tested", "not-needed", "cannot-test", "failed"] as
 export type WebStatus = typeof WEB_STATUSES[number];
 export const isWebStatus = (value: unknown): value is WebStatus => WEB_STATUSES.some(status => status === value);
 // A failed web test still needs work, like an untested one; the other three settle the ticket for the web.
-export const webSettled = (status: string | null | undefined) => isWebStatus(status) && status !== "failed";
+// "risk-accepted" is set only by a Manager accepting a failed ticket; it is not a WEB_STATUSES value, so
+// it can never be sent through web-status or bulk-status, but it settles the ticket like the others.
+export const webSettled = (status: string | null | undefined) => (isWebStatus(status) && status !== "failed") || status === "risk-accepted";
 // The release is in the app phase once every QE confirmed the web test (and stays there once completed).
 export const inAppPhase = (qeIds: string[], signedIds: string[]) => qeIds.length > 0 && qeIds.every(id => signedIds.includes(id));
 
 type WebPerson = { userId: string; displayName: string; role: string };
-type WebTicket = { assignee: string; assigneeUserId: string | null; webStatus: string | null; webAt: string | null };
+type WebTicket = { id?: number; issueKey?: string; assignee: string; assigneeUserId: string | null; webStatus: string | null; webAt: string | null };
+export type UnownedTicket = { id: number | null; issueKey: string; assignee: string };
+
+// The web phase is done once every participating QE is done and no open ticket lacks a QE.
+// A release whose app was already pushed is never locked again by unowned tickets.
+export const webPhaseDone = (qeIds: string[], signedIds: string[], unownedCount: number, appPushedAt?: string | null) =>
+  inAppPhase(qeIds, signedIds) && (unownedCount === 0 || !!appPushedAt);
 
 export function webProgress(
-  release: { source: string; createdAt: string },
+  release: { source: string; createdAt: string; appPushedAt?: string | null },
   profiles: WebPerson[],
   qeRoles: string[],
   tickets: WebTicket[],
   signoffs: { userId: string; signedAt: string }[],
 ) {
-  const qe = profiles.filter(person => qeRoles.includes(person.role));
   const legacySigned = Object.fromEntries(signoffs.map(row => [row.userId, row.signedAt]));
-  if (release.source === "manual" || inAppPhase(qe.map(person => person.userId), Object.keys(legacySigned))) {
-    return { qe, signed: legacySigned };
+  const finish = (qe: WebPerson[], signed: Record<string, string>, unowned: UnownedTicket[]) =>
+    ({ qe, signed, unowned, done: webPhaseDone(qe.map(person => person.userId), Object.keys(signed), unowned.length, release.appPushedAt) });
+  if (release.source === "manual") {
+    // A manual release fixes its QE list when created: the accounts on its rows, whatever their role is now.
+    const ids = new Set(tickets.flatMap(ticket => ticket.assigneeUserId ? [ticket.assigneeUserId] : []));
+    return finish(profiles.filter(person => ids.has(person.userId)), legacySigned, []);
+  }
+  const qe = profiles.filter(person => qeRoles.includes(person.role));
+  if (inAppPhase(qe.map(person => person.userId), Object.keys(legacySigned))) {
+    // Legacy releases keep the QE sign-offs they already have.
+    return finish(qe, legacySigned, []);
   }
   const byTester = new Map<string, WebTicket[]>();
+  const unowned: UnownedTicket[] = [];
   for (const ticket of tickets) {
     const userId = ticket.assigneeUserId ?? matchAccount(profiles, ticket.assignee);
-    if (!userId) continue;
+    if (!userId || !qe.some(person => person.userId === userId)) {
+      if (!webSettled(ticket.webStatus)) unowned.push({ id: ticket.id ?? null, issueKey: ticket.issueKey ?? "", assignee: ticket.assignee });
+      if (!userId) continue;
+    }
     const owned = byTester.get(userId) ?? [];
     owned.push(ticket);
     byTester.set(userId, owned);
@@ -102,5 +122,25 @@ export function webProgress(
       signed[userId] = owned.reduce((latest, ticket) => ticket.webAt && ticket.webAt > latest ? ticket.webAt : latest, release.createdAt);
     }
   }
-  return { qe: participants, signed };
+  return finish(participants, signed, unowned);
+}
+
+// Preview of an import: how the CSV testers map to accounts. Names are grouped so the warning reads
+// "An Nguyễn · 3 ticket" instead of one line per ticket.
+export function importReport(tickets: { assignee: string }[], profiles: { userId: string; displayName: string; role?: string }[], qeRoles: string[]) {
+  const unmatched = new Map<string, number>(), wrongRole = new Map<string, { count: number; role: string }>();
+  let noTester = 0, qeMatched = 0;
+  for (const ticket of tickets) {
+    if (!ticket.assignee) { noTester++; continue; }
+    const owner = matchAccount(profiles, ticket.assignee);
+    const role = profiles.find(person => person.userId === owner)?.role ?? "";
+    if (!owner) unmatched.set(ticket.assignee, (unmatched.get(ticket.assignee) ?? 0) + 1);
+    else if (!qeRoles.includes(role)) wrongRole.set(ticket.assignee, { count: (wrongRole.get(ticket.assignee)?.count ?? 0) + 1, role });
+    else qeMatched++;
+  }
+  return {
+    noTester, qeMatched,
+    unmatched: Array.from(unmatched, ([name, count]) => ({ name, count })),
+    wrongRole: Array.from(wrongRole, ([name, value]) => ({ name, ...value })),
+  };
 }

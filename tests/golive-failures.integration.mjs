@@ -38,7 +38,9 @@ try {
   assert.equal((await request("/api/golive", { action: "web-status", ticketId: one.id, status: "failed", reason: "Lỗi hiển thị" })).status, 200);
   assert.deepEqual(logged(releaseId), ["web:" + one.id]);
   const firstAt = sql(`SELECT failed_at FROM golive_ticket_failures WHERE ticket_id=${one.id} AND phase='web';`).trim();
-  assert.equal((await request("/api/golive", { action: "web-status", ticketId: one.id, status: null })).status, 200);
+  // Withdrawing a failed mark needs a mode; "retest" keeps the log row.
+  assert.equal((await request("/api/golive", { action: "web-status", ticketId: one.id, status: null })).status, 400);
+  assert.equal((await request("/api/golive", { action: "web-status", ticketId: one.id, status: null, mode: "retest" })).status, 200);
   assert.deepEqual(logged(releaseId), ["web:" + one.id]);
   // Failing the same ticket again keeps the first mark rather than counting a second one.
   assert.equal((await request("/api/golive", { action: "web-status", ticketId: one.id, status: "failed", reason: "Lỗi lần hai" })).status, 200);
@@ -55,9 +57,10 @@ try {
 
   // Phase app opens once every QE finished the web and the app build is pushed.
   for (const ticket of [one, three, four]) await request("/api/golive", { action: "web-status", ticketId: ticket.id, status: "tested" });
-  assert.equal((await request("/api/golive", { action: "app-pushed", releaseId })).status, 200);
+  assert.equal((await request("/api/golive", { action: "app-pushed", releaseId, build: "1.0.0" })).status, 200);
   assert.equal((await request("/api/golive", { action: "fail-test", ticketId: one.id, reason: "Crash khi mở app" })).status, 200);
-  assert.equal((await request("/api/golive", { action: "fail-test", ticketId: one.id, failed: false })).status, 200);
+  assert.equal((await request("/api/golive", { action: "fail-test", ticketId: one.id, failed: false })).status, 400);
+  assert.equal((await request("/api/golive", { action: "fail-test", ticketId: one.id, failed: false, mode: "retest" })).status, 200);
   assert.equal((await request("/api/golive", { action: "bulk-status", releaseId, phase: "app", status: "failed", ticketIds: [two.id, four.id], reason: "Lỗi app hàng loạt" })).status, 200);
   assert.deepEqual(logged(releaseId), ["app:" + one.id, "app:" + two.id, "app:" + four.id, "web:" + one.id, "web:" + two.id, "web:" + three.id]);
   // The same ticket can be logged once per phase and no more.

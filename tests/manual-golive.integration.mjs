@@ -16,6 +16,27 @@ async function request(path, body) {
 const actor = (await request("/api/profile")).data.profile;
 assert.ok(actor?.userId);
 const originalRole = sql(`SELECT role FROM user_profiles WHERE user_id=${literal(actor.userId)};`).trim();
+// The app checklist opens only once every QE of the release confirmed the web test and the build was
+// pushed. One account drives this test, so the other participants are signed off directly, and the
+// push needs a role that may push.
+// Pushing the build and completing a release are Manager jobs; this test otherwise acts as a QE.
+const asManager = async act => {
+  sql(`UPDATE user_profiles SET role='QEM' WHERE user_id=${literal(actor.userId)};`);
+  try { return await act(); } finally { sql(`UPDATE user_profiles SET role='QE' WHERE user_id=${literal(actor.userId)};`); }
+};
+const openAppPhase = async releaseId => {
+  assert.equal((await request("/api/golive", { action: "web-signoff", releaseId })).status, 200);
+  sql(`INSERT OR IGNORE INTO golive_web_signoffs(release_id,user_id,signed_at)
+    SELECT release_id, assignee_user_id, 'test' FROM golive_tickets WHERE release_id=${literal(releaseId)} AND assignee_user_id IS NOT NULL;`);
+  await asManager(async () => assert.equal((await request("/api/golive", { action: "app-pushed", releaseId, build: "1.0.0" })).status, 200));
+};
+// The devices held when the build was pushed are all required: this account may hold more than the test one.
+const tickRest = async (releaseId, ticketId) => {
+  const { required } = (await request("/api/golive?release=" + releaseId)).data;
+  for (const row of required.filter(item => item.ticketId === ticketId && item.deviceId !== deviceId)) {
+    assert.equal((await request("/api/golive", { action: "toggle-check", ticketId, deviceId: row.deviceId, checked: true })).status, 200);
+  }
+};
 try {
   sql(`UPDATE user_profiles SET role='Manager' WHERE user_id=${literal(actor.userId)};
     INSERT INTO user_profiles(user_id,email,display_name,updated_at,role) VALUES
@@ -45,18 +66,27 @@ try {
   assert.ok(!actualIds.includes(developerId));
   const own = loaded.tickets.find(item => item.assigneeUserId === actor.userId);
   const other = loaded.tickets.find(item => item.assigneeUserId === testerId);
+  // Before the app phase the checklist is closed for everyone, the ticket's own tester included.
+  assert.equal((await request("/api/golive", { action: "toggle-check", ticketId: own.id, deviceId, checked: true })).status, 409);
+  await openAppPhase(created.data.releaseId);
   assert.equal((await request("/api/golive", { action: "toggle-check", ticketId: other.id, deviceId, checked: true })).status, 403);
   assert.equal((await request("/api/golive", { action: "toggle-check", ticketId: own.id, deviceId, checked: true })).status, 200);
+  await tickRest(created.data.releaseId, own.id);
   assert.ok((await request("/api/golive?release=" + created.data.releaseId)).data.tickets.find(item => item.id === own.id).doneAt);
-  assert.equal((await request("/api/golive", { action: "complete-release", releaseId: created.data.releaseId })).status, 409);
+  // The other participant has not finished, so the release cannot be completed yet.
+  await asManager(async () => assert.equal((await request("/api/golive", { action: "complete-release", releaseId: created.data.releaseId })).status, 409));
   sql(`UPDATE user_profiles SET role='DEV' WHERE user_id=${literal(testerId)};`);
   assert.deepEqual((await request("/api/golive?release=" + created.data.releaseId)).data.tickets.map(item => item.assigneeUserId).sort(), expectedIds);
   if (expectedIds.length === 2) {
     const second = await request("/api/golive", { action: "create-manual", name: prefix + " complete", fixVersion: "release-complete" });
     assert.equal(second.status, 200); releaseIds.push(second.data.releaseId);
+    // A release still waiting for its build cannot be completed.
+    await asManager(async () => assert.equal((await request("/api/golive", { action: "complete-release", releaseId: second.data.releaseId })).status, 409));
+    await openAppPhase(second.data.releaseId);
     const row = (await request("/api/golive?release=" + second.data.releaseId)).data.tickets[0];
     await request("/api/golive", { action: "toggle-check", ticketId: row.id, deviceId, checked: true });
-    assert.equal((await request("/api/golive", { action: "complete-release", releaseId: second.data.releaseId })).status, 200);
+    await tickRest(second.data.releaseId, row.id);
+    await asManager(async () => assert.equal((await request("/api/golive", { action: "complete-release", releaseId: second.data.releaseId })).status, 200));
     const saved = (await request("/api/golive?release=" + second.data.releaseId)).data.releases.find(item => item.id === second.data.releaseId);
     assert.ok(saved.completedAt); assert.equal(saved.fixVersion, "release-complete");
     assert.equal((await request("/api/golive", { action: "toggle-check", ticketId: row.id, deviceId, checked: false })).status, 409);

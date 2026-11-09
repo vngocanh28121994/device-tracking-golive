@@ -81,6 +81,8 @@ export const goliveReleases = sqliteTable("golive_releases", {
   // Set when an App Manager/Manager marks the app build as pushed; the app checklist opens only then.
   appPushedAt: text("app_pushed_at"),
   appPushedBy: text("app_pushed_by"),
+  // Why a Manager closed the release with known risks; required when some ticket needs attention.
+  signoffNote: text("signoff_note").notNull().default(""),
 });
 
 export const goliveTickets = sqliteTable("golive_tickets", {
@@ -114,6 +116,8 @@ export const goliveTickets = sqliteTable("golive_tickets", {
   // Why the web test could not run or failed, and for "cannot-test" whether the scrum team was told.
   webReason: text("web_reason").notNull().default(""),
   webNotified: integer("web_notified", { mode: "boolean" }).notNull().default(false),
+  // The build the current app result was recorded on (null for old data and while untested).
+  appBuildId: integer("app_build_id"),
 }, table => [index("golive_tickets_release_id_idx").on(table.releaseId)]);
 
 export const goliveDeviceChecks = sqliteTable("golive_device_checks", {
@@ -122,6 +126,7 @@ export const goliveDeviceChecks = sqliteTable("golive_device_checks", {
   deviceName: text("device_name").notNull(),
   checkedByUserId: text("checked_by_user_id").notNull(),
   checkedAt: text("checked_at").notNull(),
+  buildId: integer("build_id"),
 }, table => [primaryKey({ columns: [table.ticketId, table.deviceId] })]);
 
 // Every device a tester held while the ticket was open, so handing one over cannot silently finish it.
@@ -129,6 +134,10 @@ export const goliveTicketDevices = sqliteTable("golive_ticket_devices", {
   ticketId: integer("ticket_id").notNull().references(() => goliveTickets.id),
   deviceId: text("device_id").notNull().references(() => devices.id),
   deviceName: text("device_name").notNull(),
+  // A device handed over before it was ticked can be waived with a reason.
+  waivedAt: text("waived_at"),
+  waivedBy: text("waived_by"),
+  waivedReason: text("waived_reason").notNull().default(""),
 }, table => [primaryKey({ columns: [table.ticketId, table.deviceId] })]);
 
 // Web phase sign-off: each QE confirms they finished testing the web build of a release.
@@ -166,3 +175,40 @@ export const goliveTicketFailures = sqliteTable("golive_ticket_failures", {
   primaryKey({ columns: [table.ticketId, table.phase] }),
   index("golive_ticket_failures_release_id_idx").on(table.releaseId),
 ]);
+
+// Every app push is a build. The current build of a release is its row with the largest id.
+export const goliveBuilds = sqliteTable("golive_builds", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  releaseId: text("release_id").notNull(),
+  buildNumber: text("build_number").notNull(), // "" for releases pushed before builds were recorded
+  pushedAt: text("pushed_at").notNull(),
+  pushedBy: text("pushed_by").notNull(),
+}, table => [index("golive_builds_release_id_idx").on(table.releaseId)]);
+
+// A Manager accepting a failed ticket as it is. At most one per ticket and phase.
+export const goliveRiskAcceptances = sqliteTable("golive_risk_acceptances", {
+  ticketId: integer("ticket_id").notNull(),
+  phase: text("phase").notNull(), // "web" | "app"
+  releaseId: text("release_id").notNull(),
+  reason: text("reason").notNull(),
+  acceptedBy: text("accepted_by").notNull(),
+  acceptedAt: text("accepted_at").notNull(),
+}, table => [
+  primaryKey({ columns: [table.ticketId, table.phase] }),
+  index("golive_risk_release_id_idx").on(table.releaseId),
+]);
+
+// Log of every ticket status change.
+export const goliveTicketEvents = sqliteTable("golive_ticket_events", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  ticketId: integer("ticket_id").notNull(),
+  releaseId: text("release_id").notNull(),
+  phase: text("phase").notNull(),
+  fromStatus: text("from_status").notNull(),
+  toStatus: text("to_status").notNull(),
+  reason: text("reason").notNull().default(""),
+  buildId: integer("build_id"),
+  actorUserId: text("actor_user_id"), // null when the system moves the ticket itself
+  actorName: text("actor_name").notNull(),
+  createdAt: text("created_at").notNull(),
+}, table => [index("golive_ticket_events_release_id_idx").on(table.releaseId)]);

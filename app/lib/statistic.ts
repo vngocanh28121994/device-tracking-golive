@@ -18,11 +18,11 @@ export const markedAt = (ticket: DoneMark) => ticket.failedAt || ticket.skippedA
 export const markedBy = (ticket: DoneMark) => ticket.failedAt ? (ticket.failedBy || ticket.assignee) : (ticket.skippedBy || ticket.assignee);
 export const markedHow = (ticket: DoneMark) => ticket.failedAt ? "Đánh dấu test failed"
   : ticket.skippedAt
-    ? ({ tested: "Xác nhận đã test xong", "cannot-test": "Đánh dấu không test được" }[ticket.skipKind] ?? "Đánh dấu không cần test")
+    ? ({ tested: "Xác nhận đã test xong", "cannot-test": "Đánh dấu không test được", "risk-accepted": "Chấp nhận rủi ro" }[ticket.skipKind] ?? "Đánh dấu không cần test")
     : "Tích đủ " + ticket.testedDevices + " thiết bị";
 
 // How a finished ticket got there, so the report can colour them apart.
-export type DoneKind = "onDevices" | "confirmed" | "notNeeded" | "cannotTest";
+export type DoneKind = "onDevices" | "confirmed" | "notNeeded" | "cannotTest" | "riskAccepted";
 
 // One row of the per-tester summary shown on each golive in the Statistic report.
 // done is the sum of the DoneKind counts, and done + open is total.
@@ -36,6 +36,7 @@ type Assigned = { assignee: string; assigneeUserId: string | null; doneAt: strin
 export function doneKindOf(ticket: Assigned): DoneKind {
   if (!ticket.skippedAt) return "onDevices";
   if (ticket.skipKind === "tested") return "confirmed";
+  if (ticket.skipKind === "risk-accepted") return "riskAccepted";
   return ticket.skipKind === "cannot-test" ? "cannotTest" : "notNeeded";
 }
 
@@ -46,7 +47,7 @@ export function tallyByTester(tickets: Assigned[]): TesterTally[] {
   const groups = new Map<string, TesterTally>();
   for (const ticket of tickets) {
     const name = ticket.assignee.trim();
-    const entry = groups.get(name) || { name, userId: ticket.assigneeUserId, done: 0, failed: 0, open: 0, total: 0, onDevices: 0, confirmed: 0, notNeeded: 0, cannotTest: 0 };
+    const entry = groups.get(name) || { name, userId: ticket.assigneeUserId, done: 0, failed: 0, open: 0, total: 0, onDevices: 0, confirmed: 0, notNeeded: 0, cannotTest: 0, riskAccepted: 0 };
     entry.total++;
     // A failing ticket is never Done, so the three outstanding kinds stay mutually exclusive.
     if (ticket.doneAt) { entry.done++; entry[doneKindOf(ticket)]++; }
@@ -107,9 +108,9 @@ export const phaseOf = (release: { completedAt: string | null; appPushedAt?: str
   release.completedAt ? "completed" : !release.web.done ? "web" : release.appPushedAt === null ? "build" : "app";
 
 // Phase web per tester: the same four outcomes the app phase has, picked directly on each ticket.
-export type WebKind = "tested" | "notNeeded" | "cannotTest" | "failed" | "open";
+export type WebKind = "tested" | "notNeeded" | "cannotTest" | "failed" | "riskAccepted" | "open";
 export const webKindOf = (status: string | null | undefined): WebKind =>
-  status === "tested" ? "tested" : status === "not-needed" ? "notNeeded" : status === "cannot-test" ? "cannotTest" : status === "failed" ? "failed" : "open";
+  status === "tested" ? "tested" : status === "not-needed" ? "notNeeded" : status === "cannot-test" ? "cannotTest" : status === "failed" ? "failed" : status === "risk-accepted" ? "riskAccepted" : "open";
 // done counts the three settled outcomes; failed and open are still outstanding for the web.
 export type WebTally = { name: string; userId: string | null; done: number; total: number } & Record<WebKind, number>;
 
@@ -117,7 +118,7 @@ export function tallyWebByTester(tickets: { assignee: string; assigneeUserId: st
   const groups = new Map<string, WebTally>();
   for (const ticket of tickets) {
     const name = ticket.assignee.trim();
-    const entry = groups.get(name) || { name, userId: ticket.assigneeUserId, done: 0, total: 0, tested: 0, notNeeded: 0, cannotTest: 0, failed: 0, open: 0 };
+    const entry = groups.get(name) || { name, userId: ticket.assigneeUserId, done: 0, total: 0, tested: 0, notNeeded: 0, cannotTest: 0, failed: 0, riskAccepted: 0, open: 0 };
     const kind = webKindOf(ticket.webStatus);
     entry.total++;
     entry[kind]++;
@@ -234,7 +235,7 @@ export function qeScorecard(input: QeScorecardInput): QeReport {
         row.app.tested++;
         const span = duration(appClockStart(release), markedAt(ticket));
         if (span !== null) { row.app.samples++; sums.app += span; }
-      } else row.app.skipped++;
+      } else if (kind !== "riskAccepted") row.app.skipped++; // an accepted risk is neither tested nor skipped
     }
   }
 

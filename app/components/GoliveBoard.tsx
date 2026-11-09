@@ -1,34 +1,45 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, History, CheckCircle2, ArrowUp, ArrowUpDown, Ban, Bell, Check, CircleSlash, Pencil, Globe, FileUp, Laptop, ListFilter, Plus, Rocket, Lock, Search, Smartphone, Tablet, Trash2, Undo2, UserRound, X, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, History, CheckCircle2, ArrowUp, ArrowUpDown, Ban, Bell, Check, CircleSlash, Pencil, Globe, FileUp, Laptop, ListFilter, Plus, Rocket, Lock, Search, ShieldAlert, Smartphone, Tablet, Trash2, Undo2, UserRound, X, XCircle } from "lucide-react";
 import { StyledSelect } from "./StyledSelect";
 import { HolderIdentity } from "./HolderIdentity";
 import { LoadingState } from "./LoadingState";
 import { useConfirm } from "./ConfirmDialog";
-import { canPushApp, isManager } from "../lib/roles";
+import { canPushApp, isManager, qeRoles } from "../lib/roles";
 import { readUrlParam, writeUrlParams } from "../lib/url-state";
-import { ImportedTicket, inAppPhase, isWebStatus, normalizeName, releaseNameFromCsv, ticketsFromCsv, webSettled, WebStatus } from "../lib/golive";
+import { ImportedTicket, importReport, isWebStatus, normalizeName, releaseNameFromCsv, ticketsFromCsv, webSettled, WebStatus } from "../lib/golive";
 import { ManualGoliveDialog } from "./ManualGoliveDialog";
 import { CannotTestDialog } from "./CannotTestDialog";
 import { TestFailedDialog } from "./TestFailedDialog";
+import { RevokeFailedDialog } from "./RevokeFailedDialog";
 import { PushToggle } from "./PushToggle";
+import { AppPushDialog, RetestCandidate } from "./AppPushDialog";
+import { RiskAcceptDialog } from "./RiskAcceptDialog";
+import { WaiveDeviceDialog } from "./WaiveDeviceDialog";
+import { GoliveSignoffDialog, SignoffSummary } from "./GoliveSignoffDialog";
+import { attentionList, retestChoices } from "../lib/golive-acceptance";
+import { doneKindOf } from "../lib/statistic";
 
-type Release = { id: string; name: string; source: string; fixVersion: string; createdBy: string; createdAt: string; completedAt: string | null; completedBy: string | null; ticketCount?: number };
-const MAX_HISTORY = 10;
+type Release = { id: string; name: string; source: string; fixVersion: string; createdBy: string; createdAt: string; completedAt: string | null; completedBy: string | null; signoffNote?: string; ticketCount?: number };
+const HISTORY_PAGE = 10;
+const NO_QE_MATCH = "Không có ticket nào khớp tài khoản QE. Kiểm tra lại tên người test hoặc role trước khi import.";
 type Unfinished = { issueKey: string; summary: string; assignee: string };
-type Ticket = { id: number; releaseId: string; issueKey: string; summary: string; assignee: string; assigneeUserId: string | null; doneAt: string | null; skippedAt?: string | null; skippedBy?: string | null; skipKind?: string; skipReason?: string; skipNotified?: boolean; failedAt?: string | null; failedBy?: string | null; failedReason?: string; webStatus?: string | null; webAt?: string | null; webBy?: string | null; webReason?: string; webNotified?: boolean };
+type Ticket = { id: number; releaseId: string; issueKey: string; summary: string; assignee: string; assigneeUserId: string | null; doneAt: string | null; skippedAt?: string | null; skippedBy?: string | null; skipKind?: string; skipReason?: string; skipNotified?: boolean; failedAt?: string | null; failedBy?: string | null; failedReason?: string; webStatus?: string | null; webAt?: string | null; webBy?: string | null; webReason?: string; webNotified?: boolean; appBuildId?: number | null };
+type Build = { id: number; releaseId: string; buildNumber: string; pushedAt: string; pushedBy: string };
+type Risk = { ticketId: number; phase: string; reason: string; acceptedBy: string; acceptedAt: string };
+type RequiredDevice = { ticketId: number; deviceId: string; deviceName: string; waivedAt: string | null; waivedBy: string | null; waivedReason: string; archived: boolean };
 const REFRESH_MS = 60_000;
 type Person = { userId: string; displayName: string; avatar: string; role?: string };
 type SortKey = "issueKey" | "summary" | "assignee";
 type HeldDevice = { id: string; name: string; category: string };
-type DeviceCheck = { ticketId: number; deviceId: string; deviceName: string; checkedByUserId: string; checkedAt: string };
+type DeviceCheck = { ticketId: number; deviceId: string; deviceName: string; checkedByUserId: string; checkedAt: string; buildId?: number | null };
 
 const statusClass = (status: string) => "status-chip " + (status === "Done" ? "status-done" : status === "Test Failed" ? "status-failed" : "status-blocked");
 const prettyTime = (iso: string) => new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Asia/Ho_Chi_Minh" }).format(new Date(iso));
 
-type GoliveData = { releases?: Release[]; releaseId?: string; tickets?: Ticket[]; devicesByUser?: Record<string, HeldDevice[]>; checks?: DeviceCheck[]; web?: WebPhase; error?: string };
-type WebPhase = { qe: { userId: string; displayName: string }[]; signed: Record<string, string>; appPushedAt?: string | null; appPushedBy?: string | null };
-const NO_WEB: WebPhase = { qe: [], signed: {} };
+type GoliveData = { releases?: Release[]; releaseId?: string; tickets?: Ticket[]; devicesByUser?: Record<string, HeldDevice[]>; checks?: DeviceCheck[]; web?: WebPhase; builds?: Build[]; risks?: Risk[]; required?: RequiredDevice[]; appFailedIds?: number[]; error?: string };
+type WebPhase = { qe: { userId: string; displayName: string }[]; signed: Record<string, string>; unowned?: { id: number | null; issueKey: string; assignee: string }[]; done?: boolean; appPushedAt?: string | null; appPushedBy?: string | null };
+const NO_WEB: WebPhase = { qe: [], signed: {}, unowned: [], done: false };
 // The last response outlives the component, so coming back to this page shows it at once while it refreshes.
 let lastData: GoliveData | null = null;
 
@@ -36,6 +47,9 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
   const [releases, setReleases] = useState<Release[]>(lastData?.releases || []), [releaseId, setReleaseId] = useState(lastData?.releaseId || ""), [tickets, setTickets] = useState<Ticket[]>(lastData?.tickets || []);
   const [devicesByUser, setDevicesByUser] = useState<Record<string, HeldDevice[]>>(lastData?.devicesByUser || {}), [checks, setChecks] = useState<DeviceCheck[]>(lastData?.checks || []), [mineOnly, setMineOnly] = useState(false);
   const [web, setWeb] = useState<WebPhase>(lastData?.web || NO_WEB);
+  const [builds, setBuilds] = useState<Build[]>(lastData?.builds || []), [risks, setRisks] = useState<Risk[]>(lastData?.risks || []), [required, setRequired] = useState<RequiredDevice[]>(lastData?.required || []), [appFailedIds, setAppFailedIds] = useState<number[]>(lastData?.appFailedIds || []);
+  const [pushDialog, setPushDialog] = useState<"first" | "again" | "edit" | null>(null), [riskFor, setRiskFor] = useState<{ ticket: Ticket; phase: "web" | "app" } | null>(null);
+  const [waiving, setWaiving] = useState<{ ticket: Ticket; device: { id: string; name: string } } | null>(null), [signoffOpen, setSignoffOpen] = useState(false);
   const [loading, setLoading] = useState(!lastData), [busy, setBusy] = useState(false), [view, setView] = useState<"active" | "history">(() => readUrlParam("view") === "history" ? "history" : "active");
   const [unfinished, setUnfinished] = useState<Unfinished[] | null>(null);
   const [pending, setPending] = useState<{ fileName: string; tickets: ImportedTicket[] } | null>(null), [releaseName, setReleaseName] = useState("");
@@ -48,7 +62,9 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
   // phase "web" routes the dialog's answer to the ticket's web outcome instead of the app one.
   const [cannotTest, setCannotTest] = useState<{ ticket: Ticket; editing: boolean; phase?: "web" } | null>(null);
   const [failing, setFailing] = useState<{ ticket: Ticket; editing: boolean; phase?: "web" } | null>(null);
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false), [historyShown, setHistoryShown] = useState(HISTORY_PAGE);
+  // Withdrawing a Test failed asks whether it was a slip or the ticket must be tested again.
+  const [revoking, setRevoking] = useState<{ ticket: Ticket; phase: "web" | "app" } | null>(null);
   // Tickets ticked for a bulk status update, and the reason dialog a bulk "cannot test"/"failed" opens.
   const [picked, setPicked] = useState<number[]>([]);
   const [bulkReason, setBulkReason] = useState<"cannot-test" | "failed" | null>(null);
@@ -59,7 +75,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
       const data = await r.json() as GoliveData;
       if (!r.ok) throw new Error(data.error || "Không thể tải danh sách golive.");
       lastData = data;
-      setReleases(data.releases || []); setReleaseId(data.releaseId || ""); setTickets(data.tickets || []); setDevicesByUser(data.devicesByUser || {}); setChecks(data.checks || []); setWeb(data.web || NO_WEB);
+      setReleases(data.releases || []); setReleaseId(data.releaseId || ""); setTickets(data.tickets || []); setDevicesByUser(data.devicesByUser || {}); setChecks(data.checks || []); setWeb(data.web || NO_WEB); setBuilds(data.builds || []); setRisks(data.risks || []); setRequired(data.required || []); setAppFailedIds(data.appFailedIds || []);
     } catch (e) { onError(e instanceof Error ? e.message : "Không thể tải danh sách golive."); } finally { setLoading(false); }
   }, [onError]);
   // Reopen the release named in the URL, else the one last on screen; naming it lets the server load it in parallel.
@@ -92,7 +108,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
 
   async function post(body: Record<string, unknown>) {
     const r = await fetch("/api/golive", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const data = await r.json() as { error?: string; releaseId?: string; count?: number; doneAt?: string | null; skippedAt?: string | null; skippedBy?: string | null; skipKind?: string; skipReason?: string; skipNotified?: boolean; failedAt?: string | null; failedBy?: string | null; failedReason?: string; webStatus?: string | null; webAt?: string | null; webBy?: string | null; webReason?: string; webNotified?: boolean; release?: Release; unfinished?: Unfinished[]; web?: WebPhase; pending?: number };
+    const data = await r.json() as { error?: string; releaseId?: string; count?: number; doneAt?: string | null; skippedAt?: string | null; skippedBy?: string | null; skipKind?: string; skipReason?: string; skipNotified?: boolean; failedAt?: string | null; failedBy?: string | null; failedReason?: string; webStatus?: string | null; webAt?: string | null; webBy?: string | null; webReason?: string; webNotified?: boolean; release?: Release; unfinished?: Unfinished[]; web?: WebPhase; pending?: number; appBuildId?: number | null; build?: Build; risks?: Risk[]; waivedAt?: string | null; waivedBy?: string | null; waivedReason?: string };
     if (!r.ok) throw Object.assign(new Error(data.error || "Không thể lưu thay đổi."), { unfinished: data.unfinished });
     return data;
   }
@@ -109,7 +125,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
   }
 
   async function confirmImport() {
-    if (!pending) return;
+    if (!pending || importBlocked) return;
     setBusy(true);
     try {
       const result = await post({ action: "import", name: releaseName, tickets: pending.tickets });
@@ -124,17 +140,18 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
     setChecks(current => checked ? [...current, { ticketId: ticket.id, deviceId: device.id, deviceName: device.name, checkedByUserId: currentUserId, checkedAt: new Date().toISOString() }] : current.filter(item => !(item.ticketId === ticket.id && item.deviceId === device.id)));
     try {
       const result = await post({ action: "toggle-check", ticketId: ticket.id, deviceId: device.id, checked });
-      setTickets(current => current.map(item => item.id === ticket.id ? { ...item, doneAt: result.doneAt ?? null } : item));
+      setTickets(current => current.map(item => item.id === ticket.id ? { ...item, doneAt: result.doneAt ?? null, appBuildId: result.appBuildId ?? null } : item));
+      setChecks(current => current.map(item => item.ticketId === ticket.id && item.deviceId === device.id ? { ...item, buildId: currentBuild?.id ?? null } : item));
     }
     catch (e) { setChecks(previous); onError(e instanceof Error ? e.message : "Không thể cập nhật checklist."); }
   }
 
   // "tested": the tester finished on borrowed devices; "not-needed": the ticket needs no test.
   const applySkip = (ticket: Ticket, result: Awaited<ReturnType<typeof post>>) =>
-    setTickets(current => current.map(item => item.id === ticket.id ? { ...item, doneAt: result.doneAt ?? null, failedAt: result.failedAt ?? null, failedBy: result.failedBy ?? null, failedReason: result.failedReason ?? "", skippedAt: result.skippedAt ?? null, skippedBy: result.skippedBy ?? null, skipKind: result.skipKind, skipReason: result.skipReason ?? "", skipNotified: !!result.skipNotified } : item));
+    setTickets(current => current.map(item => item.id === ticket.id ? { ...item, doneAt: result.doneAt ?? null, failedAt: result.failedAt ?? null, failedBy: result.failedBy ?? null, failedReason: result.failedReason ?? "", skippedAt: result.skippedAt ?? null, skippedBy: result.skippedBy ?? null, skipKind: result.skipKind, skipReason: result.skipReason ?? "", skipNotified: !!result.skipNotified, appBuildId: result.appBuildId ?? null } : item));
 
   const applyFail = (ticket: Ticket, result: Awaited<ReturnType<typeof post>>) =>
-    setTickets(current => current.map(item => item.id === ticket.id ? { ...item, doneAt: result.doneAt ?? null, failedAt: result.failedAt ?? null, failedBy: result.failedBy ?? null, failedReason: result.failedReason ?? "", skippedAt: result.skippedAt ?? null, skippedBy: result.skippedBy ?? null, skipKind: result.skipKind, skipReason: result.skipReason, skipNotified: result.skipNotified } : item));
+    setTickets(current => current.map(item => item.id === ticket.id ? { ...item, doneAt: result.doneAt ?? null, failedAt: result.failedAt ?? null, failedBy: result.failedBy ?? null, failedReason: result.failedReason ?? "", skippedAt: result.skippedAt ?? null, skippedBy: result.skippedBy ?? null, skipKind: result.skipKind, skipReason: result.skipReason, skipNotified: result.skipNotified, appBuildId: result.appBuildId ?? null } : item));
 
   // "Test failed" records why, and leaves the ticket outstanding.
   async function markFailed(reason: string) {
@@ -149,12 +166,21 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
     } catch (e) { onError(e instanceof Error ? e.message : "Không thể cập nhật ticket."); } finally { setBusy(false); }
   }
 
-  async function clearFailed(ticket: Ticket) {
-    if (!await confirm({ title: "Thu hồi test failed?", message: <>Ticket <strong>{ticket.issueKey}</strong> sẽ quay lại tính Done theo các máy đã tích.</>, confirmLabel: "Thu hồi" })) return;
+  async function revokeFailed(mode: "mistake" | "retest") {
+    if (!revoking) return;
+    const { ticket, phase } = revoking;
+    if (phase === "web") { if (await setWebStatus(ticket, null, "", false, mode)) setRevoking(null); return; }
     setBusy(true);
     try {
-      applyFail(ticket, await post({ action: "fail-test", ticketId: ticket.id, failed: false }));
-      onToast("Đã thu hồi test failed cho " + ticket.issueKey);
+      const result = await post({ action: "fail-test", ticketId: ticket.id, failed: false, mode });
+      applyFail(ticket, result);
+      // The server clears this ticket's ticks and its waived devices: the tester decides both again.
+      if (mode === "retest") {
+        setChecks(current => current.filter(item => item.ticketId !== ticket.id));
+        setRequired(current => current.map(item => item.ticketId === ticket.id ? { ...item, waivedAt: null, waivedBy: null, waivedReason: "" } : item));
+      }
+      setRevoking(null);
+      onToast(mode === "retest" ? "Đã thu hồi test failed, " + ticket.issueKey + " cần test lại" : "Đã thu hồi test failed cho " + ticket.issueKey);
     } catch (e) { onError(e instanceof Error ? e.message : "Không thể cập nhật ticket."); } finally { setBusy(false); }
   }
 
@@ -209,14 +235,14 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
     } catch (e) { onError(e instanceof Error ? e.message : "Không thể cập nhật ticket."); return false; } finally { setBusy(false); }
   }
 
-  async function setWebStatus(ticket: Ticket, status: WebStatus | null, reason = "", notified = false) {
-    if (status === null && !await confirm({ title: "Thu hồi trạng thái phase web?", message: <>Ticket <strong>{ticket.issueKey}</strong> sẽ quay lại chưa test web.</>, confirmLabel: "Thu hồi" })) return false;
+  async function setWebStatus(ticket: Ticket, status: WebStatus | null, reason = "", notified = false, mode?: "mistake" | "retest") {
+    if (status === null && !mode && !await confirm({ title: "Thu hồi trạng thái phase web?", message: <>Ticket <strong>{ticket.issueKey}</strong> sẽ quay lại chưa test web.</>, confirmLabel: "Thu hồi" })) return false;
     if ((status === "tested" || status === "not-needed") && !await confirm(status === "tested"
       ? { title: "Xác nhận đã test xong web?", message: <>Ticket <strong>{ticket.issueKey}</strong> được ghi nhận đã test xong ở phase web.</>, confirmLabel: "Đã test xong" }
       : { title: "Đánh dấu không cần test web?", message: <>Ticket <strong>{ticket.issueKey}</strong> được ghi nhận không cần test ở phase web. Có thể thu hồi sau.</>, confirmLabel: "Không cần test" })) return false;
     setBusy(true);
     try {
-      const result = await post({ action: "web-status", ticketId: ticket.id, status, reason, notified });
+      const result = await post({ action: "web-status", ticketId: ticket.id, status, reason, notified, mode });
       setTickets(current => current.map(item => item.id === ticket.id ? { ...item, webStatus: result.webStatus ?? null, webAt: result.webAt ?? null, webBy: result.webBy ?? null, webReason: result.webReason ?? "", webNotified: !!result.webNotified } : item));
       if (result.web) setWeb(result.web);
       onToast(status ? "Đã đánh dấu " + ticket.issueKey + " " + WEB_TOAST[status] : "Đã thu hồi trạng thái phase web của " + ticket.issueKey);
@@ -238,19 +264,56 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
   // Sends a push to every QE who has not confirmed the web test yet.
   // Web is done and the app build is out: opens the app checklist and tells every tester of the release.
   // again: a rebuilt app; undo: a push tapped by mistake, back to waiting for the build.
-  async function pushApp(mode: "first" | "again" | "undo" = "first") {
-    const ask = mode === "undo"
-      ? { title: "Thu hồi đã push app?", message: "Đợt golive quay lại bước chờ build app, checklist test app bị khóa. Các thiết bị đã tích vẫn được giữ.", confirmLabel: "Thu hồi", tone: "danger" as const }
-      : mode === "again"
-        ? { title: "Đã push bản app mới?", message: "QE có ticket trong đợt sẽ nhận thông báo cài lại bản mới. Ticket đã Done và các thiết bị đã tích vẫn giữ nguyên.", confirmLabel: "Đã push bản mới" }
-        : { title: "Xác nhận đã push app?", message: "Checklist test app sẽ mở và QE có ticket trong đợt sẽ nhận thông báo bắt đầu test app.", confirmLabel: "Đã push app" };
-    if (!await confirm(ask)) return;
+  async function pushApp(mode: "first" | "again" | "edit" | "undo" = "first") {
+    if (mode !== "undo") { setPushDialog(mode); return; }
+    if (!await confirm({ title: "Thu hồi đã push app?", message: "Đợt golive quay lại bước chờ build app, checklist test app bị khóa. Các thiết bị đã tích vẫn được giữ.", confirmLabel: "Thu hồi", tone: "danger" })) return;
     setBusy(true);
     try {
-      const result = await post({ action: "app-pushed", releaseId, again: mode === "again", undo: mode === "undo" }); setWeb(result.web || NO_WEB);
-      onToast(mode === "undo" ? "Đã thu hồi, đợt quay lại chờ build app" : mode === "again" ? "Đã báo QE cài bản app mới" : "Đã mở phase app và báo QE bắt đầu test");
-    }
-    catch (e) { onError(e instanceof Error ? e.message : "Không thể cập nhật."); } finally { setBusy(false); }
+      await post({ action: "app-pushed", releaseId, undo: true });
+      onToast("Đã thu hồi, đợt quay lại chờ build app");
+      await load(releaseId);
+    } catch (e) { onError(e instanceof Error ? e.message : "Không thể cập nhật."); } finally { setBusy(false); }
+  }
+
+  async function submitPush(build: string, retestTicketIds: number[]) {
+    const mode = pushDialog;
+    if (!mode) return;
+    setBusy(true);
+    try {
+      if (mode === "edit") await post({ action: "edit-build", releaseId, build });
+      else await post({ action: "app-pushed", releaseId, again: mode === "again", build, retestTicketIds: mode === "again" ? retestTicketIds : [] });
+      setPushDialog(null);
+      onToast(mode === "edit" ? "Đã sửa số build" : mode === "again" ? "Đã báo QE cài bản app mới" : "Đã mở phase app và báo QE bắt đầu test");
+      await load(releaseId);
+    } catch (e) { onError(e instanceof Error ? e.message : "Không thể cập nhật."); } finally { setBusy(false); }
+  }
+
+  // A Manager accepts a failed ticket (or takes the decision back); the original failure reason stays.
+  async function acceptRisk(ticket: Ticket, phase: "web" | "app", accepted: boolean, reason = "") {
+    if (!accepted && !await confirm({ title: "Thu hồi chấp nhận rủi ro?", message: <>Ticket <strong>{ticket.issueKey}</strong> quay lại trạng thái test failed.</>, confirmLabel: "Thu hồi" })) return;
+    setBusy(true);
+    try {
+      const result = await post({ action: "accept-risk", ticketId: ticket.id, phase, accepted, reason });
+      applyFail(ticket, result);
+      setTickets(current => current.map(item => item.id === ticket.id ? { ...item, webStatus: (result as { webStatus?: string | null }).webStatus ?? null } : item));
+      if (result.web) setWeb(result.web);
+      setRisks(current => [...current.filter(item => item.ticketId !== ticket.id), ...(result.risks || [])]);
+      setRiskFor(null);
+      onToast(accepted ? "Đã chấp nhận rủi ro cho " + ticket.issueKey : "Đã thu hồi chấp nhận rủi ro cho " + ticket.issueKey);
+    } catch (e) { onError(e instanceof Error ? e.message : "Không thể cập nhật ticket."); } finally { setBusy(false); }
+  }
+
+  // A device handed over before it was ticked: waive it with a reason, or take the waiver back.
+  async function waiveDevice(ticket: Ticket, device: { id: string; name: string }, waived: boolean, reason = "") {
+    if (!waived && !await confirm({ title: "Thu hồi miễn máy?", message: <>Máy <strong>{device.name}</strong> lại cần được test cho ticket <strong>{ticket.issueKey}</strong>.</>, confirmLabel: "Thu hồi" })) return;
+    setBusy(true);
+    try {
+      const result = await post({ action: "waive-device", ticketId: ticket.id, deviceId: device.id, waived, reason });
+      setRequired(current => current.map(item => item.ticketId === ticket.id && item.deviceId === device.id ? { ...item, waivedAt: result.waivedAt ?? null, waivedBy: result.waivedBy ?? null, waivedReason: result.waivedReason ?? "" } : item));
+      setTickets(current => current.map(item => item.id === ticket.id ? { ...item, doneAt: result.doneAt ?? null, appBuildId: result.appBuildId ?? null } : item));
+      setWaiving(null);
+      onToast(waived ? "Đã miễn máy " + device.name : "Đã thu hồi miễn máy " + device.name);
+    } catch (e) { onError(e instanceof Error ? e.message : "Không thể cập nhật."); } finally { setBusy(false); }
   }
 
   async function remindWeb() {
@@ -276,25 +339,28 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
   async function completeRelease() {
     const open = tickets.filter(item => !fullyTested(item));
     if (open.length) { setUnfinished(open); return; }
-    const oldest = history.length >= MAX_HISTORY ? history[history.length - 1] : null;
-    if (oldest && !await confirm({ title: "Lịch sử golive đã đầy", message: <>Lịch sử chỉ lưu {MAX_HISTORY} đợt gần nhất. Đợt cũ nhất <strong>{oldest.name}</strong> sẽ bị xoá vĩnh viễn.</>, confirmLabel: "Hoàn thành và xoá đợt cũ", tone: "danger" })) return;
+    setSignoffOpen(true);
+  }
+
+  async function submitSignoff(note: string) {
     setBusy(true);
     try {
-      await post({ action: "complete-release", releaseId });
+      await post({ action: "complete-release", releaseId, note });
+      setSignoffOpen(false);
       onToast("Đã hoàn thành và lưu vào lịch sử golive 🎉");
       setView("history"); resetFilters();
       await load(releaseId);
     } catch (e) {
       // The server re-checks; someone may have unticked a device since this page loaded.
       const list = (e as { unfinished?: Unfinished[] }).unfinished;
-      if (list?.length) { setUnfinished(list); await load(releaseId); }
+      if (list?.length) { setSignoffOpen(false); setUnfinished(list); await load(releaseId); }
       else onError(e instanceof Error ? e.message : "Không thể hoàn thành đợt golive.");
     } finally { setBusy(false); }
   }
 
   async function deleteRelease() {
     const release = releases.find(item => item.id === releaseId);
-    if (!release || !await confirm({ title: release.completedAt ? "Xoá bản lưu đợt golive?" : "Xoá đợt golive?", message: <>Đợt <strong>{release.name}</strong> cùng {tickets.length} {release.source === "manual" ? "checklist QE" : "ticket"} và toàn bộ dấu tích sẽ bị xoá vĩnh viễn. Không thể hoàn tác.</>, confirmLabel: "Xoá đợt golive", tone: "danger" })) return;
+    if (!release || !await confirm({ title: release.completedAt ? "Xoá bản lưu đợt golive?" : "Xoá đợt golive?", message: <>Đợt <strong>{release.name}</strong> cùng {tickets.length} {release.source === "manual" ? "checklist QE" : "ticket"} và toàn bộ dấu tích sẽ bị xoá vĩnh viễn. <strong>Dữ liệu thống kê của đợt này cũng bị xoá.</strong> Không thể hoàn tác.</>, confirmLabel: "Xoá đợt golive", tone: "danger" })) return;
     setBusy(true);
     try { await post({ action: "delete-release", releaseId }); onToast("Đã xoá đợt golive."); resetFilters(); await load(); }
     catch (e) { onError(e instanceof Error ? e.message : "Không thể xoá."); } finally { setBusy(false); }
@@ -319,20 +385,43 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
   // A completed release is a snapshot: only the devices ticked at completion, not today's holdings.
   // While running: the devices the tester holds now, plus ticked ones they have since handed over.
   // A device handed over before it was ticked drops off; "optional" marks one received after Done.
-  const ticketDevices = (ticket: Ticket) => {
+  type DeviceRow = { id: string; name: string; handedOver: boolean; optional: boolean; required: boolean; waived: { by: string; reason: string } | null };
+  const ticketDevices = (ticket: Ticket): DeviceRow[] => {
     const ticked = checks.filter(item => item.ticketId === ticket.id);
-    if (current?.completedAt) return ticked.map(item => ({ id: item.deviceId, name: item.deviceName, handedOver: false, optional: false }));
+    const reqs = required.filter(item => item.ticketId === ticket.id);
+    const waivedOf = (row?: RequiredDevice) => row?.waivedAt ? { by: row.waivedBy || "", reason: row.waivedReason } : null;
+    const list = new Map<string, DeviceRow>();
+    if (current?.completedAt) {
+      for (const item of ticked) list.set(item.deviceId, { id: item.deviceId, name: item.deviceName, handedOver: false, optional: false, required: true, waived: null });
+      for (const row of reqs) if (row.waivedAt) list.set(row.deviceId, { id: row.deviceId, name: row.deviceName, handedOver: false, optional: false, required: true, waived: waivedOf(row) });
+      return Array.from(list.values());
+    }
+    // While running the ticket's required list (fixed when the app was pushed) leads; the tester's current
+    // devices that arrived later are optional, and a ticked device that left the list stays visible.
     const held = ticket.assigneeUserId ? devicesByUser[ticket.assigneeUserId] || [] : [];
-    const list = new Map<string, { id: string; name: string; handedOver: boolean; optional: boolean }>();
-    for (const item of ticked) list.set(item.deviceId, { id: item.deviceId, name: item.deviceName, handedOver: !held.some(device => device.id === item.deviceId), optional: false });
-    for (const device of held) if (!list.has(device.id)) list.set(device.id, { id: device.id, name: device.name, handedOver: false, optional: !!ticket.doneAt });
+    const isHeld = (id: string) => held.some(device => device.id === id);
+    for (const row of reqs) if (!row.archived) list.set(row.deviceId, { id: row.deviceId, name: row.deviceName, handedOver: !isHeld(row.deviceId), optional: false, required: true, waived: waivedOf(row) });
+    for (const item of ticked) if (!list.has(item.deviceId)) list.set(item.deviceId, { id: item.deviceId, name: item.deviceName, handedOver: !isHeld(item.deviceId), optional: false, required: false, waived: null });
+    for (const device of held) if (!list.has(device.id)) list.set(device.id, { id: device.id, name: device.name, handedOver: false, optional: reqs.length > 0 || !!ticket.doneAt, required: false, waived: null });
     return Array.from(list.values());
   };
   // The tester or a Manager may mark a CSV ticket as not needing a test while the release is running.
   // A ticket whose tester has no matching account can be marked by anyone signed in.
   const canSkip = (ticket: Ticket) => !manual && !current?.completedAt && (!ticket.assigneeUserId || ticket.assigneeUserId === currentUserId || isManager(people.find(person => person.userId === currentUserId)?.role));
   // "Đã test xong" keeps the checklist below the badge so the devices actually tested stay visible.
+  // An accepted risk: the original failure, the Manager's reason, who and when; only a Manager takes it back.
+  const riskBadge = (ticket: Ticket, phase: "web" | "app") => {
+    const risk = risks.find(item => item.ticketId === ticket.id && item.phase === phase), original = phase === "web" ? ticket.webReason : ticket.failedReason;
+    return <div className="golive-skipped golive-skipped-cannot">
+      <span className="golive-skipped-label"><strong><ShieldAlert size={16} aria-hidden="true" /> Chấp nhận rủi ro</strong>
+        {original && <span className="golive-skip-reason">Lỗi gốc: {original}</span>}
+        {risk && <span className="golive-skip-reason">Lý do chấp nhận: {risk.reason}</span>}
+        {risk && <small>Duyệt bởi {risk.acceptedBy} · {prettyTime(risk.acceptedAt)}</small>}</span>
+      {canFinish && running && <span className="golive-skipped-actions"><button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => void acceptRisk(ticket, phase, false)}><Undo2 size={14} /> Thu hồi</button></span>}
+    </div>;
+  };
   const skipBadge = (ticket: Ticket) => {
+    if (ticket.skipKind === "risk-accepted") return riskBadge(ticket, "app");
     const cannot = ticket.skipKind === "cannot-test";
     return <div className={"golive-skipped" + (ticket.skipKind === "tested" ? " golive-skipped-tested" : cannot ? " golive-skipped-cannot" : "")}>
       <span className="golive-skipped-label"><strong>{ticket.skipKind === "tested" ? <><CheckCircle2 size={16} aria-hidden="true" /> Đã test xong</> : cannot ? <><CircleSlash size={16} aria-hidden="true" /> Không test được</> : <><Ban size={16} aria-hidden="true" /> Không cần test</>}</strong>
@@ -344,14 +433,21 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
         <button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => void setSkipped(ticket, false)}><Undo2 size={14} /> Thu hồi</button></span>}
     </div>;
   };
+  // Which build the app result was recorded on; a result on an older build than the current one is flagged.
+  const buildTag = (ticket: Ticket) => {
+    if (!ticket.doneAt && !ticket.failedAt) return null;
+    const old = ticket.appBuildId != null && !!currentBuild && ticket.appBuildId !== currentBuild.id;
+    return <div className="golive-build-tag">Build {buildLabel(ticket.appBuildId)}{old && <span className="golive-build-old"><AlertTriangle size={12} aria-hidden="true" /> Build cũ</span>}</div>;
+  };
   const failBadge = (ticket: Ticket) => <div className="golive-skipped golive-skipped-failed">
     <span className="golive-skipped-label"><strong><XCircle size={16} aria-hidden="true" /> Test failed</strong>
       {ticket.failedReason && <span className="golive-skip-reason">{ticket.failedReason}</span>}
       {ticket.failedBy && <small>Đánh dấu bởi {ticket.failedBy}</small>}
-      {canSkip(ticket) && <small className="golive-fail-hint">Test lại xong thì chọn một trạng thái bên dưới.</small>}</span>
+      {canSkip(ticket) && <small className="golive-fail-hint">Thu hồi nếu đánh dấu nhầm, hoặc chọn “Cần test lại” để QE test lại từ đầu.</small>}</span>
     {canSkip(ticket) && <span className="golive-skipped-actions">
+      {canFinish && running && <button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => setRiskFor({ ticket, phase: "app" })}><ShieldAlert size={14} /> Chấp nhận rủi ro</button>}
       <button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => setFailing({ ticket, editing: true })}><Pencil size={14} /> Sửa</button>
-      <button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => void clearFailed(ticket)}><Undo2 size={14} /> Thu hồi</button></span>}
+      <button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => setRevoking({ ticket, phase: "app" })}><Undo2 size={14} /> Thu hồi</button></span>}
   </div>;
   // Phase web column: one of the four outcomes, picked while the web phase runs and locked after it.
   // A manual golive has one row per QE, whose web outcome is that QE's own web sign-off.
@@ -360,6 +456,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
       const at = ticket.assigneeUserId ? web.signed[ticket.assigneeUserId] : undefined;
       return at ? <span className="golive-web-outcome"><CheckCircle2 size={15} aria-hidden="true" /> Đã xác nhận test web</span> : <span className="muted">Chưa xác nhận test web</span>;
     }
+    if (ticket.webStatus === "risk-accepted") return riskBadge(ticket, "web");
     // Anything but the four known outcomes (bad data) reads as not tested yet.
     const editable = !webLocked && canSkip(ticket), status = isWebStatus(ticket.webStatus) ? ticket.webStatus : null;
     if (!status) return editable
@@ -377,8 +474,9 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
         {status === "cannot-test" && <span className={"golive-skip-notified" + (ticket.webNotified ? " is-notified" : "")}>{ticket.webNotified ? <><Check size={13} aria-hidden="true" /> Đã báo scrum team</> : <><AlertTriangle size={13} aria-hidden="true" /> Chưa báo scrum team</>}</span>}
         {ticket.webBy && <small>{status === "tested" ? "Xác nhận" : "Đánh dấu"} bởi {ticket.webBy}</small>}</span>
       {editable && <span className="golive-skipped-actions">
+        {status === "failed" && canFinish && <button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => setRiskFor({ ticket, phase: "web" })}><ShieldAlert size={14} /> Chấp nhận rủi ro</button>}
         {reasoned && <button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => status === "failed" ? setFailing({ ticket, editing: true, phase: "web" }) : setCannotTest({ ticket, editing: true, phase: "web" })}><Pencil size={14} /> Sửa</button>}
-        <button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => void setWebStatus(ticket, null)}><Undo2 size={14} /> Thu hồi</button></span>}
+        <button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => status === "failed" ? setRevoking({ ticket, phase: "web" }) : void setWebStatus(ticket, null)}><Undo2 size={14} /> Thu hồi</button></span>}
     </div>;
   };
   const isChecked = (ticket: Ticket, deviceId: string) => checks.some(item => item.ticketId === ticket.id && item.deviceId === deviceId);
@@ -388,14 +486,18 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
   // while the tester has recorded a failure — which the server never lets be Done at the same time.
   // Phase web locks once every QE confirmed it; phase 2 (app) opens only after the app build is pushed.
   // A completed release is read in its app phase.
-  const webDoneNow = inAppPhase(web.qe.map(person => person.userId), Object.keys(web.signed));
+  const webDoneNow = !!web.done;
   const webLocked = !!current?.completedAt || webDoneNow;
   const appPhase = !!current?.completedAt || (webDoneNow && !!web.appPushedAt);
   const waitingBuild = webLocked && !appPhase;
+  const currentBuild = builds[builds.length - 1] ?? null;
+  const buildLabel = (id: number | null | undefined) => builds.find(item => item.id === id)?.buildNumber || "—";
+  // Completing is only possible in the app phase; the tooltip names the missing step.
+  const completeHint = waitingBuild ? "Cần App Manager xác nhận đã push app." : "Cần tất cả QE hoàn thành test web" + ((web.unowned || []).length ? " và mọi ticket đều có QE phụ trách" : "") + " rồi push app.";
   const appStatusOf = (ticket: Ticket) => ticket.failedAt ? "Test Failed" : fullyTested(ticket) ? "Done" : "In Progress";
   // The web outcome reads the same way: failed is Test Failed, the other three settle it as Done.
   const webStatusOf = (ticket: Ticket) => manual ? (ticket.assigneeUserId && ticket.assigneeUserId in web.signed ? "Done" : "In Progress")
-    : ticket.webStatus === "failed" ? "Test Failed" : isWebStatus(ticket.webStatus) ? "Done" : "In Progress";
+    : ticket.webStatus === "failed" ? "Test Failed" : webSettled(ticket.webStatus) ? "Done" : "In Progress";
   // The status column and its filters follow the phase the release is in.
   const statusOf = (ticket: Ticket) => appPhase ? appStatusOf(ticket) : webStatusOf(ticket);
   const counts = (["In Progress", "Test Failed", "Done"] as const).map(status => [status, tickets.filter(item => statusOf(item) === status).length] as const);
@@ -434,8 +536,13 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
   const pickedList = tickets.filter(item => picked.includes(item.id) && canSkip(item)).map(item => item.issueKey);
   const pickedKeys = pickedList.slice(0, 5).join(", ") + (pickedList.length > 5 ? " và " + (pickedList.length - 5) + " ticket khác" : "");
   const me = people.find(person => person.userId === currentUserId);
+  const canFinish = isManager(me?.role);
+  const importCheck = useMemo(() => pending ? importReport(pending.tickets, people, qeRoles) : null, [pending, people]);
+  const importBlocked = !!importCheck && importCheck.qeMatched === 0;
+  const importWarned = !!importCheck && (importCheck.noTester > 0 || importCheck.unmatched.length > 0 || importCheck.wrongRole.length > 0);
   const webSigned = web.qe.filter(person => person.userId in web.signed), webPending = web.qe.filter(person => !(person.userId in web.signed));
-  const webDone = web.qe.length > 0 && webPending.length === 0;
+  const webDone = webDoneNow;
+  const unowned = web.unowned || [];
   const iSignedWeb = currentUserId in web.signed, iAmQe = web.qe.some(person => person.userId === currentUserId);
   const running = !!current && !current.completedAt;
   // A QE confirms the web test only after every one of their tickets has a settled web outcome.
@@ -446,7 +553,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
     : webDone
       ? <section className="golive-web golive-web-done" role="status"><CheckCircle2 size={22} aria-hidden="true" /><div className="golive-web-done-text">{waitingBuild
         ? <><strong>Quá trình test web đã hoàn tất, có thể build app.</strong><small>{web.qe.length}/{web.qe.length} QE đã hoàn thành · Đang chờ App Manager build và push app.</small></>
-        : <><strong>App đã được push · Giai đoạn 2: test app.</strong><small>{web.appPushedAt && !current?.completedAt ? "Push " + prettyTime(web.appPushedAt) + (web.appPushedBy ? " · " + web.appPushedBy : "") + " · " : ""}Test app theo checklist thiết bị bên dưới.</small></>}</div>{running && waitingBuild && canPushApp(me?.role) && <button type="button" className="primary-button golive-app-remind" disabled={busy} onClick={() => void pushApp()}><Rocket size={15} /> Đã push app</button>}{running && appPhase && canPushApp(me?.role) && <span className="golive-push-actions"><button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => void pushApp("again")}><Rocket size={14} /> Đã push bản mới</button><button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => void pushApp("undo")}><Undo2 size={14} /> Thu hồi push</button></span>}{running && appPhase && isManager(me?.role) && tickets.some(item => !item.doneAt && !item.failedAt) && <button type="button" className="outline-button golive-app-remind" disabled={busy} onClick={() => void remindApp()}><Bell size={15} /> Nhắc test app</button>}{manual && running && waitingBuild && iSignedWeb && <button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => void signWeb(false)}><Undo2 size={14} /> Thu hồi</button>}</section>
+        : <><strong>App đã được push · Giai đoạn 2: test app.</strong><small>{web.appPushedAt && !current?.completedAt ? "Build " + (currentBuild?.buildNumber || "—") + " · Push " + prettyTime(currentBuild?.pushedAt || web.appPushedAt) + ((currentBuild?.pushedBy || web.appPushedBy) ? " · " + (currentBuild?.pushedBy || web.appPushedBy) : "") + " · " : ""}Test app theo checklist thiết bị bên dưới.</small></>}</div>{running && waitingBuild && canPushApp(me?.role) && <button type="button" className="primary-button golive-app-remind" disabled={busy} onClick={() => void pushApp()}><Rocket size={15} /> Đã push app</button>}{running && appPhase && canPushApp(me?.role) && <span className="golive-push-actions"><button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => void pushApp("again")}><Rocket size={14} /> Đã push bản mới</button><button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => void pushApp("edit")}><Pencil size={14} /> Sửa build</button>{builds.length <= 1 && <button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => void pushApp("undo")}><Undo2 size={14} /> Thu hồi push</button>}</span>}{running && appPhase && isManager(me?.role) && tickets.some(item => !item.doneAt && !item.failedAt) && <button type="button" className="outline-button golive-app-remind" disabled={busy} onClick={() => void remindApp()}><Bell size={15} /> Nhắc test app</button>}{manual && running && waitingBuild && iSignedWeb && <button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => void signWeb(false)}><Undo2 size={14} /> Thu hồi</button>}</section>
       : <section className="golive-web panel">
         <div className="golive-web-head">
           <span className="golive-web-step"><Globe size={16} /> Giai đoạn 1 · Test web</span>
@@ -455,6 +562,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
             ? <span className="golive-web-mine"><Check size={15} /> Bạn đã xác nhận <button type="button" className="outline-button golive-skip-button" disabled={busy} onClick={() => void signWeb(false)}><Undo2 size={14} /> Thu hồi</button></span>
             : <button type="button" className="primary-button golive-web-sign" disabled={busy} onClick={() => void signWeb(true)}><CheckCircle2 size={17} /> Đã hoàn thành test web</button>)}
         </div>
+        {!manual && unowned.length > 0 && <p className="golive-web-note golive-web-warning" role="alert"><AlertTriangle size={14} aria-hidden="true" /> Còn <strong>{unowned.length}</strong> ticket chưa có QE phụ trách: {unowned.slice(0, 10).map(item => item.issueKey).join(", ")}{unowned.length > 10 ? " và " + (unowned.length - 10) + " ticket khác" : ""}. Hãy gán tài khoản QE cho người test hoặc đánh dấu các ticket này.</p>}
         {!manual && <p className="golive-web-note">Hệ thống tự ghi nhận khi bạn hoàn thành các ticket ở cột <strong>Phase web</strong>. Phase app mở khi tất cả QE tham gia đã hoàn thành.{running && iAmQe && !iSignedWeb && myWebOpen > 0 && <> Bạn còn <strong>{myWebOpen}</strong> ticket chưa có trạng thái phase web (hoặc đang Test failed).</>}</p>}
         <div className="golive-web-bar" role="progressbar" aria-label="Tiến trình test web" aria-valuemin={0} aria-valuemax={web.qe.length} aria-valuenow={webSigned.length}><span style={{ width: (webSigned.length / web.qe.length * 100) + "%" }} /></div>
         <div className="golive-web-pending">
@@ -464,6 +572,24 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
         </div>
       </section>;
 
+  const attention = attentionList({
+    tickets: tickets.map(item => ({ id: item.id, issueKey: item.issueKey, assignee: item.assignee, skippedAt: item.skippedAt ?? null, skipKind: item.skipKind ?? "not-needed", skipReason: item.skipReason ?? "", skipNotified: !!item.skipNotified, failedReason: item.failedReason ?? "", webStatus: item.webStatus ?? null, webReason: item.webReason ?? "", webNotified: !!item.webNotified, appBuildId: item.appBuildId ?? null, doneAt: item.doneAt })),
+    risks, waived: required.filter(row => row.waivedAt).map(row => ({ ticketId: row.ticketId, deviceName: row.deviceName, waivedReason: row.waivedReason })), currentBuildId: currentBuild?.id ?? null,
+  });
+  const signoffSummary = (): SignoffSummary => {
+    const webCounts = { tested: 0, notNeeded: 0, cannotTest: 0, riskAccepted: 0 }, appCounts = { onDevices: 0, confirmed: 0, notNeeded: 0, cannotTest: 0, riskAccepted: 0 };
+    for (const item of tickets) {
+      if (item.webStatus === "tested") webCounts.tested++; else if (item.webStatus === "not-needed") webCounts.notNeeded++; else if (item.webStatus === "cannot-test") webCounts.cannotTest++; else if (item.webStatus === "risk-accepted") webCounts.riskAccepted++;
+      if (item.doneAt) appCounts[doneKindOf({ assignee: item.assignee, assigneeUserId: item.assigneeUserId, doneAt: item.doneAt, skippedAt: item.skippedAt ?? null, skipKind: item.skipKind ?? "not-needed" })]++;
+    }
+    return { name: current?.name || "", fixVersion: current?.fixVersion || "", build: currentBuild?.buildNumber || "", qeCount: web.qe.length, manual, web: webCounts, app: appCounts, attention: attention.items, noteRequired: attention.noteRequired };
+  };
+  const retestCandidates: RetestCandidate[] = retestChoices({ tickets, tickedTicketIds: checks.map(item => item.ticketId), appFailedIds, manual })
+    .flatMap(choice => {
+      const item = tickets.find(row => row.id === choice.id);
+      return item ? [{ id: item.id, issueKey: item.issueKey, summary: item.summary, assignee: item.assignee, status: appStatusOf(item), preselected: choice.preselected }] : [];
+    });
+
   return <>
     <div className="page-heading"><div><h1>Tracking Golive.</h1><p>Tạo đợt golive cho team QE hoặc import ticket từ Jira. Người test xác nhận trên từng thiết bị đang cầm.</p></div>
       <div className="golive-heading-actions"><PushToggle onError={onError} onToast={onToast} /><button className="outline-button" onClick={() => fileInput.current?.click()}><FileUp size={18} /> Import CSV</button><button className="primary-button" onClick={() => setCreating(true)}><Plus size={18} /> Tạo đợt golive</button></div>
@@ -472,15 +598,15 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
       : <>
         <div className="filter-tabs golive-tabs" role="tablist">
           <button role="tab" aria-selected={view === "active"} className={view === "active" ? "active" : ""} onClick={() => switchView("active")}>Đang thực hiện ({active.length})</button>
-          <button role="tab" aria-selected={view === "history"} className={view === "history" ? "active" : ""} onClick={() => switchView("history")}><History size={15} /> Lịch sử golive ({history.length}/{MAX_HISTORY})</button>
+          <button role="tab" aria-selected={view === "history"} className={view === "history" ? "active" : ""} onClick={() => switchView("history")}><History size={15} /> Lịch sử golive ({history.length})</button>
         </div>
         {view === "active" && active.length === 0 && <section className="panel golive-empty"><Rocket size={34} /><h2>Chưa có đợt golive nào đang thực hiện</h2><p>Tạo đợt golive bằng tên và fixVersion, hoặc import danh sách ticket từ Jira.</p><button className="primary-button" onClick={() => setCreating(true)}><Plus size={18} /> Tạo đợt golive</button></section>}
-        {showHistoryList && (history.length === 0 ? <section className="panel golive-empty"><History size={34} /><h2>Chưa có đợt golive nào hoàn thành</h2><p>Các đợt đã hoàn thành được lưu ở đây, tối đa {MAX_HISTORY} đợt gần nhất.</p></section>
-          : <><p className="golive-history-note">Lưu tối đa {MAX_HISTORY} đợt golive hoàn thành gần nhất. Khi hoàn thành đợt mới, đợt cũ nhất sẽ tự xoá.</p>
-            <ul className="golive-history">{history.map(item => <li key={item.id}><button type="button" onClick={() => openRelease(item.id)}>
+        {showHistoryList && (history.length === 0 ? <section className="panel golive-empty"><History size={34} /><h2>Chưa có đợt golive nào hoàn thành</h2><p>Các đợt đã hoàn thành được lưu ở đây.</p></section>
+          : <><ul className="golive-history">{history.slice(0, historyShown).map(item => <li key={item.id}><button type="button" onClick={() => openRelease(item.id)}>
               <span className="golive-history-icon"><CheckCircle2 size={20} /></span>
               <span className="golive-history-main"><strong>{item.name}</strong><small>Hoàn thành {prettyTime(item.completedAt!)}{item.completedBy ? " · " + item.completedBy : ""}</small></span>
-              <span className="golive-history-count">{item.ticketCount ?? 0} {item.source === "manual" ? "QE" : "ticket"}{item.fixVersion && <small className="golive-version">{item.fixVersion}</small>}</span><ArrowRight size={17} /></button></li>)}</ul></>)}
+              <span className="golive-history-count">{item.ticketCount ?? 0} {item.source === "manual" ? "QE" : "ticket"}{item.fixVersion && <small className="golive-version">{item.fixVersion}</small>}</span><ArrowRight size={17} /></button></li>)}</ul>
+            {history.length > historyShown && <button type="button" className="outline-button golive-history-more" onClick={() => setHistoryShown(historyShown + HISTORY_PAGE)}>Xem thêm ({history.length - historyShown} đợt)</button>}</>)}
         {showDetail && current && <>
         <div className="golive-release-bar">
           {current.completedAt ? <><button type="button" className="outline-button golive-back" onClick={() => setReleaseId("")}><ArrowLeft size={16} /> Lịch sử</button><h2 className="golive-release-title">{current.name}</h2></>
@@ -489,10 +615,14 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
           {current && <span className="golive-progress"><strong>{done}/{tickets.length}</strong> {rowLabel} đã test xong trên mọi thiết bị</span>}
           {current?.completedAt && <span className="golive-completed"><CheckCircle2 size={16} /> Đã hoàn thành {prettyTime(current.completedAt)}{current.completedBy ? " · " + current.completedBy : ""}</span>}
           <div className="golive-release-actions">
-          {!current.completedAt && <button className="primary-button golive-complete" disabled={busy} onClick={() => void completeRelease()}><CheckCircle2 size={17} /> Hoàn thành đợt golive</button>}
-          <button className="outline-button golive-delete" disabled={busy} onClick={() => void deleteRelease()} aria-label="Xoá đợt golive" title="Xoá đợt golive"><Trash2 size={16} /><span className="golive-delete-label">Xoá đợt golive</span></button>
+          {!current.completedAt && canFinish && <button className="primary-button golive-complete" disabled={busy || !appPhase} title={appPhase ? undefined : completeHint} onClick={() => void completeRelease()}><CheckCircle2 size={17} /> Hoàn thành đợt golive</button>}
+          {canFinish && <button className="outline-button golive-delete" disabled={busy} onClick={() => void deleteRelease()} aria-label="Xoá đợt golive" title="Xoá đợt golive"><Trash2 size={16} /><span className="golive-delete-label">Xoá đợt golive</span></button>}
           </div>
         </div>
+        {current.completedAt && (current.signoffNote || attention.items.length > 0) && <section className="panel golive-signoff-panel">
+          {current.signoffNote && <><h3>Ghi chú nghiệm thu</h3><p>{current.signoffNote}</p></>}
+          {attention.items.length > 0 && <><h3>Cần lưu ý ({attention.items.length})</h3><ul>{attention.items.map(item => <li key={item.ticketId}><strong>{item.issueKey}</strong> <span className="muted">{item.assignee}</span><ul>{item.reasons.map((reason, index) => <li key={index}>{reason.text}</li>)}</ul></li>)}</ul></>}
+        </section>}
         {webPanel}
         <div className="golive-stats">{counts.map(([status, count]) => <button key={status} className={"golive-stat " + (statusFilter === status ? "active" : "")} aria-pressed={statusFilter === status} onClick={() => setStatusFilter(statusFilter === status ? "__all__" : status)}><span className={statusClass(status)}>{status}</span><strong>{count}</strong><small>{statusFilter === status ? "Đang lọc · bấm để bỏ" : (tickets.length ? Math.round(count / tickets.length * 100) : 0) + "% trên " + tickets.length + " " + rowLabel}</small></button>)}</div>
         {/* Scope first ("mine" is the filter testers use most), then search and the column filters. */}
@@ -544,20 +674,24 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
             const list = ticketDevices(ticket), mine = ticket.assigneeUserId === currentUserId && !current?.completedAt && !(ticket.skippedAt && ticket.skipKind !== "tested");
             if (list.length === 0) return <span className="muted">Người test chưa cầm thiết bị nào</span>;
             return <div className="golive-device-group">
-              <div className="golive-device-count">{list.filter(device => isChecked(ticket, device.id)).length}/{list.length} thiết bị đã test</div>
+              <div className="golive-device-count">{list.filter(device => isChecked(ticket, device.id) || device.waived).length}/{list.length} thiết bị đã test</div>
               <ul className={"golive-checklist " + (fullyTested(ticket) ? "complete" : "")}>{list.map(device => {
                 const checked = isChecked(ticket, device.id);
                 const DeviceIcon = /ipad|tablet|máy tính bảng/i.test(device.name) ? Tablet : /laptop|macbook/i.test(device.name) ? Laptop : Smartphone;
-                const detail = device.handedOver ? "Đã test · đã bàn giao" : device.optional && !checked ? "Máy mới · không bắt buộc" : checked ? "Đã test" : "Chưa test";
+                const detail = device.waived ? "Đã miễn" : device.handedOver ? (checked ? "Đã test · đã bàn giao" : "Đã bàn giao · chưa test") : device.optional && !checked ? "Máy mới · không bắt buộc" : checked ? "Đã test" : "Chưa test";
+                const canWaive = running && canSkip(ticket) && !manual;
                 return <li key={device.id}><label className={(checked ? "checked " : "") + (mine ? "" : "readonly")} title={mine ? "" : current?.completedAt ? "Đợt golive đã hoàn thành" : "Chỉ " + ticket.assignee + " mới tích được"}>
                   <input type="checkbox" aria-label={(manual ? ticket.assignee : ticket.issueKey) + " · " + device.name} checked={checked} disabled={!mine} onChange={e => void toggleCheck(ticket, device, e.target.checked)} />
                   <DeviceIcon className="golive-device-icon" size={19} aria-hidden="true" />
                   <span className="golive-device-copy"><span className="golive-device-name">{device.name}</span><small>{detail}</small></span>
                   <span className="golive-check-box" aria-hidden="true">{checked && <Check size={13} strokeWidth={3} />}</span>
-                </label></li>;
+                </label>
+                {device.waived && <div className="golive-device-extra">Miễn bởi {device.waived.by || "—"}: {device.waived.reason}{canWaive && <button type="button" className="text-button golive-skip-button" disabled={busy} onClick={() => void waiveDevice(ticket, device, false)}><Undo2 size={13} /> Thu hồi</button>}</div>}
+                {!device.waived && device.required && device.handedOver && !checked && canWaive && <div className="golive-device-extra"><button type="button" className="text-button golive-skip-button" disabled={busy} onClick={() => setWaiving({ ticket, device })}><Ban size={13} /> Miễn máy này</button></div>}
+                </li>;
               })}</ul>
             </div>;
-          })()}{ticket.failedAt && failBadge(ticket)}{canSkip(ticket) && !ticket.doneAt && <div className="golive-skip-actions">
+          })()}{buildTag(ticket)}{ticket.failedAt && failBadge(ticket)}{canSkip(ticket) && !ticket.doneAt && <div className="golive-skip-actions">
             <button type="button" className="text-button golive-skip-button" disabled={busy} onClick={() => void setSkipped(ticket, true, "tested")}><CheckCircle2 size={14} /> Đã test xong</button>
             <button type="button" className="text-button golive-skip-button" disabled={busy} onClick={() => void setSkipped(ticket, true)}><Ban size={14} /> Không cần test</button>
             <button type="button" className="text-button golive-skip-button" disabled={busy} onClick={() => setCannotTest({ ticket, editing: false })}><CircleSlash size={14} /> Không test được</button>
@@ -571,6 +705,11 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
     {bulkReason === "cannot-test" && <CannotTestDialog issueKey={pickedKeys} busy={busy} onCancel={() => setBulkReason(null)} onSubmit={(reason, notified) => void bulkUpdate("cannot-test", reason, notified).then(ok => { if (ok) setBulkReason(null); })} />}
     {failing && <TestFailedDialog key={failing.ticket.id} issueKey={failing.ticket.issueKey} editing={failing.editing} initialReason={failing.editing ? (failing.phase === "web" ? failing.ticket.webReason : failing.ticket.failedReason) || "" : ""} busy={busy} onCancel={() => setFailing(null)} onSubmit={reason => void markFailed(reason)} />}
     {cannotTest && <CannotTestDialog key={cannotTest.ticket.id} issueKey={cannotTest.ticket.issueKey} editing={cannotTest.editing} initialReason={cannotTest.editing ? (cannotTest.phase === "web" ? cannotTest.ticket.webReason : cannotTest.ticket.skipReason) || undefined : undefined} initialNotified={cannotTest.editing && !!(cannotTest.phase === "web" ? cannotTest.ticket.webNotified : cannotTest.ticket.skipNotified)} busy={busy} onCancel={() => setCannotTest(null)} onSubmit={(reason, notified) => void markCannotTest(reason, notified)} />}
+    {pushDialog && <AppPushDialog key={pushDialog} mode={pushDialog} initialBuild={pushDialog === "edit" ? currentBuild?.buildNumber || "" : ""} candidates={pushDialog === "again" ? retestCandidates : []} busy={busy} onCancel={() => setPushDialog(null)} onSubmit={(build, ids) => void submitPush(build, ids)} />}
+    {riskFor && <RiskAcceptDialog issueKey={riskFor.ticket.issueKey} failedReason={(riskFor.phase === "web" ? riskFor.ticket.webReason : riskFor.ticket.failedReason) || ""} busy={busy} onCancel={() => setRiskFor(null)} onSubmit={reason => void acceptRisk(riskFor.ticket, riskFor.phase, true, reason)} />}
+    {waiving && <WaiveDeviceDialog deviceName={waiving.device.name} busy={busy} onCancel={() => setWaiving(null)} onSubmit={reason => void waiveDevice(waiving.ticket, waiving.device, true, reason)} />}
+    {signoffOpen && <GoliveSignoffDialog summary={signoffSummary()} busy={busy} onCancel={() => setSignoffOpen(false)} onSubmit={note => void submitSignoff(note)} />}
+    {revoking && <RevokeFailedDialog issueKey={revoking.ticket.issueKey} phase={revoking.phase} busy={busy} onCancel={() => setRevoking(null)} onSubmit={mode => void revokeFailed(mode)} />}
     {unfinished && <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setUnfinished(null); }} onKeyDown={e => { if (e.key === "Escape") setUnfinished(null); }}><div className="modal golive-warning" role="alertdialog" aria-modal="true" aria-labelledby="golive-warning-title">
       <div className="modal-head"><div className="golive-warning-head"><AlertTriangle size={22} /><div><h2 id="golive-warning-title">Chưa thể hoàn thành đợt golive</h2><p>Còn {unfinished.length} {rowLabel} chưa Done. Người test cần tích đủ các thiết bị đang cầm.</p></div></div><button className="icon-button" onClick={() => setUnfinished(null)} aria-label="Đóng"><X size={21} /></button></div>
       <div className="golive-warning-list"><table><thead><tr>{!manual && <><th>MÃ</th><th>TÊN TICKET</th></>}<th>NGƯỜI TEST</th></tr></thead><tbody>{unfinished.map(item => <tr key={item.issueKey}>{!manual && <><td className="golive-key">{item.issueKey}</td><td>{item.summary}</td></>}<td>{item.assignee || <span className="muted">Chưa có người test</span>}</td></tr>)}</tbody></table></div>
@@ -579,8 +718,14 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
     {pending && <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget && !busy) setPending(null); }}><div className="modal" role="dialog" aria-modal="true" aria-label="Đặt tên đợt golive">
       <div className="modal-head"><div><h2>Đặt tên đợt golive</h2><p className="golive-file">{pending.fileName} · {pending.tickets.length} ticket</p></div><button className="icon-button" disabled={busy} onClick={() => setPending(null)} aria-label="Đóng"><X size={21} /></button></div>
       <div className="form-grid"><label className="span-2">TÊN ĐỢT GOLIVE<input autoFocus value={releaseName} maxLength={120} onChange={e => setReleaseName(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !busy) void confirmImport(); if (e.key === "Escape" && !busy) setPending(null); }} placeholder="Ví dụ: Golive 15/11 – Release 2.4" /></label></div>
+      {importCheck && importWarned && <div className="golive-import-warning" role="alert"><AlertTriangle size={16} aria-hidden="true" /><div>
+        {importCheck.noTester > 0 && <p><strong>{importCheck.noTester}</strong> ticket không có người test.</p>}
+        {importCheck.unmatched.length > 0 && <p>Tên không khớp tài khoản nào: {importCheck.unmatched.map(item => item.name + " (" + item.count + " ticket)").join(", ")}.</p>}
+        {importCheck.wrongRole.length > 0 && <p>Khớp tài khoản nhưng role không phải QE/QEM: {importCheck.wrongRole.map(item => item.name + " (" + item.count + " ticket, role " + (item.role || "—") + ")").join(", ")}.</p>}
+      </div></div>}
+      {importBlocked && <p className="form-error" role="alert">{NO_QE_MATCH}</p>}
       <ul className="golive-preview">{pending.tickets.slice(0, 5).map(ticket => <li key={ticket.issueKey}><strong>{ticket.issueKey}</strong> {ticket.summary}</li>)}{pending.tickets.length > 5 && <li className="muted">… và {pending.tickets.length - 5} ticket khác</li>}</ul>
-      <div className="modal-actions"><button className="outline-button" disabled={busy} onClick={() => setPending(null)}>Huỷ</button><button className="primary-button" disabled={busy || releaseName.trim().length < 2} onClick={() => void confirmImport()}>{busy ? "Đang import..." : "Import"} <ArrowRight size={17} /></button></div>
+      <div className="modal-actions"><button className="outline-button" disabled={busy} onClick={() => setPending(null)}>Huỷ</button><button className="primary-button" disabled={busy || importBlocked || releaseName.trim().length < 2} onClick={() => void confirmImport()}>{busy ? "Đang import..." : "Import"} <ArrowRight size={17} /></button></div>
     </div></div>}
     {creating && <ManualGoliveDialog onClose={() => setCreating(false)} onManageRoles={() => { setCreating(false); onManageRoles(); }} onCreated={id => { setCreating(false); setView("active"); resetFilters(); onToast("Đã tạo đợt golive."); void load(id); }} />}
   </>;

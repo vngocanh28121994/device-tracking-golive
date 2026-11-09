@@ -129,7 +129,8 @@ export async function GET(request: Request) {
     const releases = rows.map(release => {
       const count = counts.find(item => item.releaseId === release.id);
       const progress = webProgress(release, profiles, qeRoles, webTickets.filter(ticket => ticket.releaseId === release.id), signoffs.filter(row => row.releaseId === release.id));
-      const web = webSummary(progress.qe.map(person => person.userId), Object.keys(progress.signed));
+      // Same rule as the board: unowned tickets keep the web phase open until the app is pushed.
+      const web = { ...webSummary(progress.qe.map(person => person.userId), Object.keys(progress.signed)), done: progress.done };
       return { ...release, total: count?.total ?? 0, done: Number(count?.done ?? 0), failed: Number(count?.failed ?? 0), web };
     });
     return json({ releases });

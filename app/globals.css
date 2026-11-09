@@ -838,6 +838,7 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 .stat-part-confirmed { background: #6fb9a0; }
 .stat-part-cannotTest { background: #d79a4e; }
 .stat-part-notNeeded { background: #9b8ec4; }
+.stat-part-riskAccepted { background: #e0b04a; }
 .stat-part-failed { background: #c4505c; }
 .stat-part-open { background: #bdb6c7; }
 .stat-stack-counts { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 11px; margin-top: 7px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -849,6 +850,7 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 .stat-legend-confirmed::before { background: #6fb9a0; }
 .stat-legend-cannotTest::before { background: #d79a4e; }
 .stat-legend-notNeeded::before { background: #9b8ec4; }
+.stat-legend-riskAccepted::before { background: #e0b04a; }
 .stat-legend-failed::before { background: #c4505c; }
 .stat-legend-open::before { background: #bdb6c7; }
 /* Floats above everything, so a slice inside a scrolling table can still name its tickets. */
@@ -1639,3 +1641,39 @@ body .golive-skip-actions .golive-skip-button svg { flex: none; }
   /* In the web column the buttons are the whole content, so no top gap: they line up with the lock box. */
   body .golive-web-cell > .golive-skip-actions { margin-top: 0; }
 }
+
+.golive-import-warning { display: flex; gap: 10px; margin: 0 0 12px; padding: 10px 12px; border-radius: 10px; background: #fff7e6; color: #8a5a00; font-size: 13px; }
+.golive-import-warning p { margin: 0 0 4px; }
+.golive-import-warning p:last-child { margin-bottom: 0; }
+.golive-import-warning svg { flex: none; margin-top: 2px; }
+.golive-history-more { display: block; margin: 12px auto 0; }
+.golive-web-warning { display: flex; gap: 6px; align-items: flex-start; color: #8a5a00; }
+.golive-web-warning svg { flex: none; margin-top: 3px; }
+.revoke-options { display: grid; gap: 10px; margin: 0; padding: 0; border: 0; }
+.revoke-options label { display: flex; gap: 10px; align-items: flex-start; padding: 12px; border: 1px solid var(--line, #e3e6ea); border-radius: 10px; cursor: pointer; }
+.revoke-options label:has(input:checked) { border-color: #28715d; background: #f3faf6; }
+.revoke-options small { display: block; color: var(--muted); }
+
+.app-push-dialog, .signoff-dialog { width: min(640px, calc(100vw - 32px)); }
+.retest-picker { display: grid; gap: 8px; }
+.retest-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.retest-tools .search { flex: 1; min-width: 180px; }
+.retest-count { margin: 0; font-size: 13px; color: var(--muted); }
+.retest-list { list-style: none; margin: 0; padding: 0; max-height: 260px; overflow: auto; border: 1px solid var(--line, #e3e6ea); border-radius: 10px; }
+.retest-list li + li { border-top: 1px solid var(--line, #e3e6ea); }
+.retest-list label { display: flex; gap: 10px; align-items: flex-start; padding: 8px 12px; cursor: pointer; }
+.retest-main small { display: block; color: var(--muted); }
+.signoff-info { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px 16px; margin: 0; }
+.signoff-info dt { font-size: 12px; color: var(--muted); }
+.signoff-info dd { margin: 0; font-weight: 600; }
+.signoff-groups { display: flex; flex-wrap: wrap; gap: 12px 32px; }
+.signoff-groups h3, .signoff-attention h3 { margin: 0 0 4px; font-size: 14px; }
+.signoff-groups ul, .signoff-attention ul { margin: 0; padding-left: 18px; font-size: 13px; }
+.signoff-attention { max-height: 200px; overflow: auto; }
+.golive-build-tag { display: inline-flex; gap: 6px; align-items: center; margin-top: 6px; font-size: 12px; color: var(--muted); }
+.golive-build-old { color: #8a5a00; font-weight: 600; }
+.golive-risk-note { display: block; font-size: 12px; color: var(--muted); }
+.golive-device-extra { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 2px 0 0 28px; font-size: 12px; color: var(--muted); }
+.golive-signoff-panel { margin: 12px 0; padding: 14px 16px; }
+.golive-signoff-panel h3 { margin: 0 0 6px; font-size: 14px; }
+.golive-signoff-panel ul { margin: 0; padding-left: 18px; font-size: 13px; }

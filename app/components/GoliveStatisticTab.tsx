@@ -30,6 +30,7 @@ const BAR_PARTS = [
   { kind: "confirmed", short: "đã test xong", label: "ticket người test xác nhận đã test xong" },
   { kind: "cannotTest", short: "không test được", label: "ticket được đánh dấu không test được" },
   { kind: "notNeeded", short: "không cần test", label: "ticket được đánh dấu không cần test" },
+  { kind: "riskAccepted", short: "chấp nhận rủi ro", label: "ticket chấp nhận rủi ro" },
   { kind: "failed", short: "test failed", label: "ticket test failed" },
   { kind: "open", short: "chưa test", label: "ticket chưa test" },
 ] as const;
@@ -38,10 +39,11 @@ const WEB_PARTS = [
   { kind: "tested", cls: "onDevices", short: "đã test xong", label: "ticket đã test xong web" },
   { kind: "cannotTest", cls: "cannotTest", short: "không test được", label: "ticket không test được web" },
   { kind: "notNeeded", cls: "notNeeded", short: "không cần test", label: "ticket không cần test web" },
+  { kind: "riskAccepted", cls: "riskAccepted", short: "chấp nhận rủi ro", label: "ticket chấp nhận rủi ro web" },
   { kind: "failed", cls: "failed", short: "test failed", label: "ticket test web failed" },
   { kind: "open", cls: "open", short: "chưa test", label: "ticket chưa test web" },
 ] as const;
-const WEB_LABEL = { tested: "Đã test xong", notNeeded: "Không cần test", cannotTest: "Không test được", failed: "Test failed", open: "Chưa test" } as const;
+const WEB_LABEL = { tested: "Đã test xong", notNeeded: "Không cần test", cannotTest: "Không test được", failed: "Test failed", riskAccepted: "Chấp nhận rủi ro", open: "Chưa test" } as const;
 const webChip = (kind: keyof typeof WEB_LABEL) => "status-chip " + (kind === "failed" ? "status-failed" : kind === "open" ? "status-blocked" : "status-done");
 // The same two phases as the Tracking Golive board: QE confirm the web build, then test the app on devices.
 const PHASE_LABEL = { web: "Giai đoạn 1 · Test web", build: "Chờ build app", app: "Giai đoạn 2 · Test app", completed: "Hoàn thành" } as const;
@@ -368,7 +370,7 @@ export function GoliveStatisticTab({ people, currentUserId, onToast, onError }: 
                       return <span className="stat-done-stamp"><span className={webChip(kind)}>{WEB_LABEL[kind]}</span>
                         {/* Who and when only mean something once the ticket has a web outcome. */}
                         {kind !== "open" && ticket.webAt && <small>{prettyStamp(ticket.webAt)}{ticket.webBy ? " · " + ticket.webBy : ""}</small>}
-                        {(kind === "cannotTest" || kind === "failed") && ticket.webReason && <small className={kind === "failed" ? "stat-fail-reason" : ""}>{ticket.webReason}</small>}</span>;
+                        {(kind === "cannotTest" || kind === "failed" || kind === "riskAccepted") && ticket.webReason && <small className={kind === "failed" ? "stat-fail-reason" : ""}>{ticket.webReason}</small>}</span>;
                     })()}</td>}
                     <td className="golive-ticket-status"><span className={statusClass(statusOf(ticket))}>{statusOf(ticket)}</span></td>
                     <td className="stat-done-at">{done || ticket.failedAt

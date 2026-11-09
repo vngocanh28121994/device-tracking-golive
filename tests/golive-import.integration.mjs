@@ -4,7 +4,12 @@ import { ticketsFromCsv, releaseNameFromCsv } from "../app/lib/golive.ts";
 
 const base = process.argv[2] || "http://localhost:5181";
 if (!/^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(base)) throw new Error("Use a local preview, never production.");
-const csv = process.argv[3] ? readFileSync(process.argv[3], "utf8") : "\uFEFFIssue key,Summary,Custom field (Quality Engineer),Fix versions\n" + Array.from({ length: 33 }, (_, i) => `TEST-${i + 1},Ticket ${i + 1},Tester,Test release`).join("\n");
+// R4 blocks an import whose testers match no QE account, so the sample CSV names a real one.
+const accounts = await (await fetch(base + "/api/profile?list=1", { headers: { Cookie: "__sites_local_auth=1" } })).json();
+const tester = (accounts.accounts || []).find(item => item.role === "QE" || item.role === "QEM");
+if (!process.argv[3] && !tester) throw new Error("Cần ít nhất một tài khoản role QE hoặc QEM trong D1 local. Gán role trong “Tài khoản của tôi” rồi chạy lại.");
+const sample = '"' + (tester?.displayName || "").replaceAll('"', '""') + '"';
+const csv = process.argv[3] ? readFileSync(process.argv[3], "utf8") : "\uFEFFIssue key,Summary,Custom field (Quality Engineer),Fix versions\n" + Array.from({ length: 33 }, (_, i) => `TEST-${i + 1},Ticket ${i + 1},${sample},Test release`).join("\n");
 const tickets = ticketsFromCsv(csv);
 assert.ok(tickets.length > 10, "Use enough tickets to exercise multiple inserts.");
 async function request(body, query = "") {

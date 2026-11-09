@@ -45,9 +45,9 @@ const tally = tallyByTester([
 
 // Whoever has the most left to test leads; the no-tester bucket is always last.
 assert.deepEqual(tally.map(row => row.name), ["Gia Bảo", "Minh Anh", ""]);
-assert.deepEqual(tally[0], { name: "Gia Bảo", userId: "u_bao", done: 1, failed: 0, open: 2, total: 3, onDevices: 0, confirmed: 1, notNeeded: 0, cannotTest: 0 });
-assert.deepEqual(tally[1], { name: "Minh Anh", userId: "u_anh", done: 2, failed: 0, open: 1, total: 3, onDevices: 1, confirmed: 0, notNeeded: 1, cannotTest: 0 });
-assert.deepEqual(tally[2], { name: "", userId: null, done: 0, failed: 0, open: 1, total: 1, onDevices: 0, confirmed: 0, notNeeded: 0, cannotTest: 0 });
+assert.deepEqual(tally[0], { name: "Gia Bảo", userId: "u_bao", done: 1, failed: 0, open: 2, total: 3, onDevices: 0, confirmed: 1, notNeeded: 0, cannotTest: 0, riskAccepted: 0 });
+assert.deepEqual(tally[1], { name: "Minh Anh", userId: "u_anh", done: 2, failed: 0, open: 1, total: 3, onDevices: 1, confirmed: 0, notNeeded: 1, cannotTest: 0, riskAccepted: 0 });
+assert.deepEqual(tally[2], { name: "", userId: null, done: 0, failed: 0, open: 1, total: 1, onDevices: 0, confirmed: 0, notNeeded: 0, cannotTest: 0, riskAccepted: 0 });
 
 // The three done kinds add back up to done, and with open they span the tester's whole total,
 // so the four slices of the stacked bar can neither overflow nor leave a gap.
@@ -70,7 +70,7 @@ const mixed = tallyByTester([
   ticket("Lan", "u_lan", "x", "x", "not-needed"),
   ticket("Lan", "u_lan", null),
 ])[0];
-assert.deepEqual(mixed, { name: "Lan", userId: "u_lan", done: 4, failed: 0, open: 1, total: 5, onDevices: 1, confirmed: 1, notNeeded: 1, cannotTest: 1 });
+assert.deepEqual(mixed, { name: "Lan", userId: "u_lan", done: 4, failed: 0, open: 1, total: 5, onDevices: 1, confirmed: 1, notNeeded: 1, cannotTest: 1, riskAccepted: 0 });
 
 // A tester whose account is only matched on a later ticket still names the whole group.
 const late = tallyByTester([ticket("Minh Anh", null, null), ticket("Minh Anh", "u_anh", null)]);
@@ -113,7 +113,7 @@ const withFailure = tallyByTester([
   ticket("Lan", "u_lan", "2026-11-04T08:00:00.000Z"),
   ticket("Lan", "u_lan", null),
 ])[0];
-assert.deepEqual(withFailure, { name: "Lan", userId: "u_lan", done: 1, failed: 1, open: 1, total: 3, onDevices: 1, confirmed: 0, notNeeded: 0, cannotTest: 0 });
+assert.deepEqual(withFailure, { name: "Lan", userId: "u_lan", done: 1, failed: 1, open: 1, total: 3, onDevices: 1, confirmed: 0, notNeeded: 0, cannotTest: 0, riskAccepted: 0 });
 
 // The mark column reports a failure the same way it reports a done mark.
 const failed = { ...base, failedAt: "2026-11-04T09:00:00.000Z", failedBy: "Minh Anh", testedDevices: 2, lastCheckedAt: "2026-11-04T08:00:00.000Z" };
@@ -195,6 +195,92 @@ console.log("Statistic test-failed: outstanding rather than Done, and its own ma
   assert.equal(inAppPhase(["a", "b"], Object.keys(progress.signed)), true);
   const manual = webProgress({ ...release, source: "manual" }, profiles, ["QE", "QEM"], tickets, [{ userId: "b", signedAt: webAt }]);
   assert.deepEqual(manual.signed, { b: webAt });
+}
+
+// Unowned tickets block the web phase until the app is pushed; manual releases fix their QE list.
+{
+  const { webProgress, importReport } = await import("../app/lib/golive.ts");
+  const profiles = [
+    { userId: "a", displayName: "An", role: "QE" },
+    { userId: "d", displayName: "Dũng", role: "DEV" },
+  ];
+  const at = "2026-11-07T02:00:00Z";
+  const csv = { source: "csv", createdAt: "2026-11-07T01:00:00Z" };
+  const tickets = [
+    { id: 1, issueKey: "X-1", assignee: "An", assigneeUserId: "a", webStatus: "tested", webAt: at },
+    { id: 2, issueKey: "X-2", assignee: "Dũng", assigneeUserId: null, webStatus: null, webAt: null },
+    { id: 3, issueKey: "X-3", assignee: "", assigneeUserId: null, webStatus: null, webAt: null },
+  ];
+  let progress = webProgress(csv, profiles, ["QE", "QEM"], tickets, []);
+  assert.deepEqual(progress.unowned.map(item => item.issueKey), ["X-2", "X-3"]);
+  assert.equal(progress.done, false);
+  progress = webProgress({ ...csv, appPushedAt: at }, profiles, ["QE", "QEM"], tickets, []);
+  assert.equal(progress.done, true);
+  tickets[1].webStatus = "not-needed"; tickets[2].webStatus = "cannot-test";
+  progress = webProgress(csv, profiles, ["QE", "QEM"], tickets, []);
+  assert.deepEqual([progress.unowned.length, progress.done], [0, true]);
+
+  // Manual: the QE list is the accounts on the rows, even if one is no longer QE.
+  const manual = webProgress({ source: "manual", createdAt: at }, profiles, ["QE", "QEM"], [{ assignee: "Dũng", assigneeUserId: "d", webStatus: null, webAt: null }], [{ userId: "d", signedAt: at }]);
+  assert.deepEqual(manual.qe.map(person => person.userId), ["d"]);
+  assert.equal(manual.done, true);
+
+  const report = importReport([{ assignee: "An" }, { assignee: "An" }, { assignee: "Dũng" }, { assignee: "Lạ" }, { assignee: "" }], profiles, ["QE", "QEM"]);
+  assert.equal(report.qeMatched, 2); assert.equal(report.noTester, 1);
+  assert.deepEqual(report.unmatched, [{ name: "Lạ", count: 1 }]);
+  assert.deepEqual(report.wrongRole, [{ name: "Dũng", count: 1, role: "DEV" }]);
+  console.log("Golive web phase: unowned tickets, manual QE list and import report.");
+}
+
+// Acceptance rules: Done on the required device list, event statuses, risk-accepted in the report.
+{
+  const { doneOnRequiredDevices, appEventStatus, attentionList, eventRow } = await import("../app/lib/golive-acceptance.ts");
+  const { webSettled } = await import("../app/lib/golive.ts");
+  const { doneKindOf, markedHow, tallyByTester, tallyWebByTester, webKindOf, qeScorecard } = await import("../app/lib/statistic.ts");
+  const dev = (deviceId, extra = {}) => ({ deviceId, waived: false, archived: false, ...extra });
+  // The tester held A and B, ticked A and handed B over: not Done until B is ticked or waived.
+  assert.equal(doneOnRequiredDevices([dev("A"), dev("B")], ["A"]), false);
+  assert.equal(doneOnRequiredDevices([dev("A"), dev("B")], ["A", "B"]), true);
+  assert.equal(doneOnRequiredDevices([dev("A"), dev("B", { waived: true })], ["A"]), true);
+  assert.equal(doneOnRequiredDevices([dev("A"), dev("B", { archived: true })], ["A"]), true);
+  assert.equal(doneOnRequiredDevices([], []), false);
+  assert.equal(doneOnRequiredDevices([dev("B", { archived: true })], []), false);
+
+  const state = { doneAt: null, failedAt: null, skippedAt: null, skipKind: "not-needed" };
+  assert.equal(appEventStatus(state), "open");
+  assert.equal(appEventStatus({ ...state, doneAt: "x" }), "done-devices");
+  assert.equal(appEventStatus({ ...state, failedAt: "x" }), "failed");
+  assert.equal(appEventStatus({ ...state, doneAt: "x", skippedAt: "x", skipKind: "risk-accepted" }), "risk-accepted");
+  assert.equal(eventRow({ ticketId: 1, releaseId: "r", phase: "app", from: "open", to: "failed", actor: { userId: null, name: "Hệ thống" }, now: "t" }).actorUserId, null);
+
+  // Risk accepted settles the web ticket and is neither tested nor skipped in the QE report.
+  assert.equal(webSettled("risk-accepted"), true);
+  assert.equal(webKindOf("risk-accepted"), "riskAccepted");
+  const risky = { assignee: "An", assigneeUserId: "a", doneAt: "x", skippedAt: "x", skipKind: "risk-accepted" };
+  assert.equal(doneKindOf(risky), "riskAccepted");
+  assert.equal(markedHow({ ...risky, skippedBy: "M", testedDevices: 0, lastCheckedAt: null }), "Chấp nhận rủi ro");
+  assert.equal(tallyByTester([risky])[0].riskAccepted, 1);
+  assert.equal(tallyWebByTester([{ assignee: "An", assigneeUserId: "a", webStatus: "risk-accepted" }])[0].done, 1);
+  const base = { skippedAt: null, skippedBy: null, skipKind: "not-needed", failedAt: null, testedDevices: 0, lastCheckedAt: null, webStatus: null, webAt: null, doneAt: null };
+  const report = qeScorecard({
+    releases: [{ id: "r", name: "R", source: "csv", createdAt: "2026-11-01T01:00:00Z", appPushedAt: "2026-11-01T03:00:00Z" }],
+    tickets: [{ ...base, id: 1, releaseId: "r", assignee: "An", assigneeUserId: "a", webStatus: "risk-accepted", doneAt: "2026-11-01T05:00:00Z", skippedAt: "2026-11-01T05:00:00Z", skipKind: "risk-accepted" }],
+    failures: [{ ticketId: 1, phase: "app" }], profiles: [{ userId: "a", displayName: "An", role: "QE" }], qeRoles: ["QE"],
+    matchAccount: (profiles, name) => profiles.find(person => person.displayName === name)?.userId ?? null, normalizeName: name => name.toLowerCase(),
+  });
+  const row = report.rows[0];
+  assert.deepEqual([row.app.tested, row.app.skipped, row.app.failed, row.app.samples, row.open, row.web.tested, row.web.skipped], [0, 0, 1, 0, 0, 0, 0]);
+
+  // The note is mandatory only for cannot-test, not-notified and risk-accepted; old build and waivers just show.
+  const ticket = { id: 1, issueKey: "X-1", assignee: "An", skippedAt: null, skipKind: "not-needed", skipReason: "", skipNotified: false, failedReason: "", webStatus: null, webReason: "", webNotified: false, appBuildId: 1, doneAt: "x" };
+  let result = attentionList({ tickets: [ticket], risks: [], waived: [{ ticketId: 1, deviceName: "iPhone", waivedReason: "đã chuyển" }], currentBuildId: 2 });
+  assert.deepEqual([result.items.length, result.noteRequired], [1, false]);
+  assert.deepEqual(result.items[0].reasons.map(reason => reason.kind), ["old-build", "waived"]);
+  result = attentionList({ tickets: [{ ...ticket, skippedAt: "x", skipKind: "cannot-test", skipReason: "không có máy" }], risks: [], waived: [], currentBuildId: 1 });
+  assert.equal(result.noteRequired, true);
+  result = attentionList({ tickets: [ticket], risks: [{ ticketId: 1, phase: "app", reason: "ok", acceptedBy: "M" }], waived: [], currentBuildId: 1 });
+  assert.equal(result.noteRequired, true);
+  console.log("Golive acceptance: required devices, event statuses, risk-accepted and sign-off attention.");
 }
 
 // ===== Tab "QE": qeScorecard over several golive releases =====

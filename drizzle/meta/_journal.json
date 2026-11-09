@@ -169,6 +169,13 @@
       "when": 1794195618660,
       "tag": "0023_golive-ticket-failures",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1794218469637,
+      "tag": "0024_golive-acceptance",
+      "breakpoints": true
     }
   ]
 }
