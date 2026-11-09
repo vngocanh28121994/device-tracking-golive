@@ -152,3 +152,17 @@ export const pushSettings = sqliteTable("push_settings", {
   updatedBy: text("updated_by").notNull(),
   updatedAt: text("updated_at").notNull(),
 });
+
+// Every first "Test Failed" mark, kept per phase so the Statistic report can still count a ticket
+// that was failed and later passed. Unmarking or re-testing never deletes a row; deleting the
+// release does. No foreign key, like golive_web_signoffs.
+export const goliveTicketFailures = sqliteTable("golive_ticket_failures", {
+  ticketId: integer("ticket_id").notNull(),
+  phase: text("phase").notNull(), // "web" | "app"
+  releaseId: text("release_id").notNull(),
+  failedBy: text("failed_by").notNull(),
+  failedAt: text("failed_at").notNull(),
+}, table => [
+  primaryKey({ columns: [table.ticketId, table.phase] }),
+  index("golive_ticket_failures_release_id_idx").on(table.releaseId),
+]);

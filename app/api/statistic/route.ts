@@ -1,12 +1,13 @@
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql, type SQLWrapper } from "drizzle-orm";
 import { waitUntil } from "cloudflare:workers";
 import { requireMember } from "../../lib/member-access";
 import { getDb } from "../../../db";
-import { goliveDeviceChecks, goliveReleases, goliveTickets, goliveWebSignoffs, userProfiles } from "../../../db/schema";
+import { goliveDeviceChecks, goliveReleases, goliveTicketFailures, goliveTickets, goliveWebSignoffs, userProfiles } from "../../../db/schema";
 import { canViewStatistic, qeRoles } from "../../lib/roles";
-import { matchAccount, webProgress } from "../../lib/golive";
+import { matchAccount, normalizeName, webProgress } from "../../lib/golive";
 import { notifyUsers, pushEnabled } from "../../lib/push";
-import { untestedNotices, webRoster, webSummary } from "../../lib/statistic";
+import { qeScorecard, untestedNotices, webRoster, webSummary } from "../../lib/statistic";
+import { historyDateBounds } from "../../lib/history-dates";
 
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { "Cache-Control": "private, no-store" } });
 
@@ -20,14 +21,67 @@ async function requireReporter() {
   return { user: access.user, db };
 }
 
+// Tab "QE": one row per QE over every release created in the filtered period. A release in the
+// period brings all of its tickets, the running one included. Everything is read in four round
+// trips whose ticket and failure rows are narrowed by a subquery, never by a list of release ids:
+// a long period would otherwise blow past D1's parameter limit.
+async function qeReport(db: ReturnType<typeof getDb>, from: string, to: string) {
+  const bounds = historyDateBounds(from, to);
+  const period = bounds.from && bounds.until
+    ? sql`${goliveReleases.createdAt} >= ${bounds.from} and ${goliveReleases.createdAt} < ${bounds.until}`
+    : bounds.from ? sql`${goliveReleases.createdAt} >= ${bounds.from}`
+    : bounds.until ? sql`${goliveReleases.createdAt} < ${bounds.until}`
+    : sql`1 = 1`;
+  const inPeriod = (column: SQLWrapper) =>
+    sql`${column} in (select ${goliveReleases.id} from ${goliveReleases} where ${period})`;
+  const [releases, tickets, ticks, failures, profiles] = await Promise.all([
+    db.select({ id: goliveReleases.id, name: goliveReleases.name, source: goliveReleases.source, createdAt: goliveReleases.createdAt, appPushedAt: goliveReleases.appPushedAt })
+      .from(goliveReleases).where(period),
+    db.select({
+      id: goliveTickets.id, releaseId: goliveTickets.releaseId, assignee: goliveTickets.assignee, assigneeUserId: goliveTickets.assigneeUserId,
+      doneAt: goliveTickets.doneAt, skippedAt: goliveTickets.skippedAt, skippedBy: goliveTickets.skippedBy, skipKind: goliveTickets.skipKind,
+      failedAt: goliveTickets.failedAt, webStatus: goliveTickets.webStatus, webAt: goliveTickets.webAt,
+    }).from(goliveTickets).where(inPeriod(goliveTickets.releaseId)),
+    db.select({
+      ticketId: goliveDeviceChecks.ticketId,
+      devices: sql<number>`count(*)`,
+      lastCheckedAt: sql<string>`max(${goliveDeviceChecks.checkedAt})`,
+    }).from(goliveDeviceChecks)
+      .where(sql`${goliveDeviceChecks.ticketId} in (select ${goliveTickets.id} from ${goliveTickets} where ${inPeriod(goliveTickets.releaseId)})`)
+      .groupBy(goliveDeviceChecks.ticketId),
+    db.select({ ticketId: goliveTicketFailures.ticketId, phase: goliveTicketFailures.phase })
+      .from(goliveTicketFailures).where(inPeriod(goliveTicketFailures.releaseId)),
+    db.select({ userId: userProfiles.userId, displayName: userProfiles.displayName, role: userProfiles.role }).from(userProfiles),
+  ]);
+  const ticksById = new Map(ticks.map(tick => [tick.ticketId, tick]));
+  return qeScorecard({
+    releases, failures, profiles, qeRoles, matchAccount, normalizeName,
+    tickets: tickets.map(ticket => {
+      const tick = ticksById.get(ticket.id);
+      return { ...ticket, testedDevices: tick?.devices ?? 0, lastCheckedAt: tick?.lastCheckedAt ?? null };
+    }),
+  });
+}
+
 // Read-only reporting: unlike /api/golive this never re-derives Done, so a Manager opening the
 // report cannot move a ticket. It shows exactly what the testers have already recorded.
 export async function GET(request: Request) {
   const access = await requireReporter();
   if ("response" in access) return access.response;
   const db = access.db;
+  const params = new URL(request.url).searchParams;
+  if (params.get("view") === "qe") {
+    try {
+      return json(await qeReport(db, params.get("from") || "", params.get("to") || ""));
+    } catch (e) {
+      // historyDateBounds rejects a malformed or inverted range; that is the caller's mistake, not ours.
+      const message = e instanceof Error ? e.message : "";
+      if (message.startsWith("Ngày")) return json({ error: message }, 400);
+      return json({ error: "Không thể tải số liệu QE." }, 500);
+    }
+  }
   try {
-    const releaseId = new URL(request.url).searchParams.get("release") || "";
+    const releaseId = params.get("release") || "";
     if (releaseId) {
       // One round trip each: the tickets, how many devices each one has ticked so far, and the web sign-offs.
       const [rows, ticks, profiles, signoffs, [release]] = await Promise.all([

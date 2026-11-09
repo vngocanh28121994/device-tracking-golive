@@ -44,10 +44,14 @@ const emoji = (category:string, name="") => {
  return <Icon className="device-svg" aria-hidden="true"/>;
 };
 
+// The Statistic screen's own state (its tab and the QE period) is cleared on the way out, the same
+// way the golive board's ?view=/?release= are.
+const STATISTIC_PARAMS={statView:"",statRange:"",statFrom:"",statTo:""};
+
 export default function Home(){
  const [page,setPageState]=useState<Page>("inventory");
  // Moving to another screen records it in ?tab= (a new history entry), so a reload stays put.
- const setPage=useCallback((next:Page)=>{setPageState(next);if(readUrlParam("tab")!==(next==="inventory"?"":next))writeUrlParams({tab:next==="inventory"?"":next,...(next==="golive"?{}:{view:"",release:""})},true)},[]);
+ const setPage=useCallback((next:Page)=>{setPageState(next);if(readUrlParam("tab")!==(next==="inventory"?"":next))writeUrlParams({tab:next==="inventory"?"":next,...(next==="golive"?{}:{view:"",release:""}),...(next==="statistic"?{}:STATISTIC_PARAMS)},true)},[]);
  const [people,setPeople]=useState<Person[]>([]),[avatarDraft,setAvatarDraft]=useState(""),[avatarProcessing,setAvatarProcessing]=useState(false);
  const [items,setItems]=useState<Device[]>([]);
  const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false);
@@ -113,7 +117,7 @@ export default function Home(){
  },[]);
  // The golive page has its own data; people from the first inventory load are enough there.
  useEffect(()=>{if(page!=="golive")void load()},[page,load]);
- useEffect(()=>{if(profile&&page==="statistic"&&!canViewStatistic(profile.role))writeUrlParams({tab:""})},[page,profile]);
+ useEffect(()=>{if(profile&&page==="statistic"&&!canViewStatistic(profile.role))writeUrlParams({tab:"",...STATISTIC_PARAMS})},[page,profile]);
  useEffect(()=>{const refresh=()=>{if(document.visibilityState==="visible")void load()};document.addEventListener("visibilitychange",refresh);return()=>document.removeEventListener("visibilitychange",refresh)},[load]);
  useEffect(()=>{void (async()=>{try{const r=await fetch("/api/profile",{cache:"no-store"});if(r.status===401){setSignedOut(true);return}if(r.status===403){setAccessDenied(true);return}const data=await r.json() as {profile?:Profile;error?:string};if(!r.ok)throw new Error(data.error||"Không thể tải hồ sơ.");if(data.profile){setProfile(data.profile);setAvatarDraft(data.profile.avatar||"");setProfileName(data.profile.displayName||data.profile.suggestedName||"")
 // A first sign-in opens the profile so the person sets their real name before anything else.

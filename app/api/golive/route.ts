@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { requireMember } from "../../lib/member-access";
 import { getDb } from "../../../db";
-import { devices, goliveDeviceChecks, goliveReleases, goliveTicketDevices, goliveTickets, goliveWebSignoffs, userProfiles } from "../../../db/schema";
+import { devices, goliveDeviceChecks, goliveReleases, goliveTicketDevices, goliveTicketFailures, goliveTickets, goliveWebSignoffs, userProfiles } from "../../../db/schema";
 import { inAppPhase, isWebStatus, matchAccount, webProgress } from "../../lib/golive";
 import { waitUntil } from "cloudflare:workers";
 import { accountRoles, appPushRoles, canPushApp, isManager, isQe, managerRoles, qeRoles } from "../../lib/roles";
@@ -11,6 +11,8 @@ type Db = ReturnType<typeof getDb>;
 const MAX_COMPLETED = 10;
 // Drizzle binds 13 values per ticket, including defaults. Keep each statement below D1's 100-parameter limit.
 const TICKET_INSERT_BATCH_SIZE = 5;
+// A failure log row binds 5 values; the same D1 parameter limit caps a bulk mark's inserts.
+const FAILURE_INSERT_BATCH_SIZE = 15;
 type Profile = { userId: string; displayName: string };
 
 // Managers and PMs follow progress; everyone hears when a phase or the release is finished.
@@ -114,6 +116,7 @@ const APP_PHASE_ONLY = "Đợt golive đã sang giai đoạn 2 · Test app, khô
 async function deleteRelease(db: Db, releaseId: string) {
   await db.batch([
     db.delete(goliveWebSignoffs).where(eq(goliveWebSignoffs.releaseId, releaseId)),
+    db.delete(goliveTicketFailures).where(eq(goliveTicketFailures.releaseId, releaseId)),
     db.delete(goliveDeviceChecks).where(inRelease(goliveDeviceChecks.ticketId, releaseId)),
     db.delete(goliveTicketDevices).where(inRelease(goliveTicketDevices.ticketId, releaseId)),
     db.delete(goliveTickets).where(eq(goliveTickets.releaseId, releaseId)),
@@ -154,6 +157,11 @@ export async function POST(request: Request) {
   try {
     const db = getDb();
     const now = new Date().toISOString();
+    // The first "Test Failed" of a ticket in a phase is remembered for the Statistic report, which
+    // has to count a ticket that failed and later passed. Unmarking or re-testing leaves the row
+    // behind on purpose: nothing tells a mistaken mark apart from a failure that was really fixed.
+    const failureLog = (rows: { ticketId: number; phase: "web" | "app"; releaseId: string; failedBy: string; failedAt: string }[]) =>
+      db.insert(goliveTicketFailures).values(rows).onConflictDoNothing();
     if (body.action === "create-manual") {
       const name = clean(body.name, 120), fixVersion = clean(body.fixVersion, 120);
       if (name.length < 2 || !fixVersion) return error("Nhập tên đợt golive (ít nhất 2 ký tự) và fixVersion.");
@@ -262,9 +270,12 @@ export async function POST(request: Request) {
       const by = me?.displayName || user.displayName || user.email;
       // Failing a ticket takes Done away and clears any skip mark; undoing lets the next load decide
       // Done again from the device ticks, exactly as undoing a skip does.
-      await db.update(goliveTickets).set(failed
+      const write = db.update(goliveTickets).set(failed
         ? { failedAt: now, failedBy: by, failedReason: reason, doneAt: null, skippedAt: null, skippedBy: null, skipKind: "not-needed", skipReason: "", skipNotified: false }
         : { failedAt: null, failedBy: null, failedReason: "" }).where(eq(goliveTickets.id, ticketId));
+      // The failure is logged for the Statistic report; undoing the mark leaves the log alone.
+      if (failed) await db.batch([write, failureLog([{ ticketId, phase: "app", releaseId: ticket.releaseId, failedBy: by, failedAt: now }])]);
+      else await write;
       const { tickets } = await loadRelease(db, ticket.releaseId, now, ticketId);
       const updated = tickets[0];
       return Response.json({ doneAt: updated?.doneAt ?? null, failedAt: updated?.failedAt ?? null, failedBy: updated?.failedBy ?? null, failedReason: updated?.failedReason ?? "", skippedAt: updated?.skippedAt ?? null, skippedBy: updated?.skippedBy ?? null, skipKind: updated?.skipKind ?? "not-needed", skipReason: updated?.skipReason ?? "", skipNotified: updated?.skipNotified ?? false });
@@ -272,7 +283,7 @@ export async function POST(request: Request) {
     // Bulk update: one of the four outcomes for many tickets of one release, in the phase it is in.
     // Same rules as the single-ticket actions; tickets the user may not mark are left alone and counted.
     if (body.action === "bulk-status") {
-      const releaseId = clean(body.releaseId, 60), phase = body.phase === "web" ? "web" : "app";
+      const releaseId = clean(body.releaseId, 60), phase: "web" | "app" = body.phase === "web" ? "web" : "app";
       const status = isWebStatus(body.status) ? body.status : null;
       if (!status) return error("Trạng thái không hợp lệ.");
       const ids = Array.from(new Set((Array.isArray(body.ticketIds) ? body.ticketIds : []).map(Number).filter(Number.isInteger))).slice(0, 1000);
@@ -308,6 +319,10 @@ export async function POST(request: Request) {
       // D1 caps bound parameters per statement, so updates go in chunks of one batch.
       const writes = [];
       for (let i = 0; i < allowedIds.length; i += 90) writes.push(db.update(goliveTickets).set(values).where(inArray(goliveTickets.id, allowedIds.slice(i, i + 90))));
+      if (status === "failed") {
+        const logs = allowedIds.map(ticketId => ({ ticketId, phase, releaseId, failedBy: by, failedAt: now }));
+        for (let i = 0; i < logs.length; i += FAILURE_INSERT_BATCH_SIZE) writes.push(failureLog(logs.slice(i, i + FAILURE_INSERT_BATCH_SIZE)));
+      }
       await db.batch(writes as [typeof writes[number], ...typeof writes]);
       if (phase === "app" && status !== "failed") waitUntil(announceDone(db, releaseId, release.name, allowed));
       const updatedWeb = phase === "web" ? await webPhase(db, releaseId) : undefined;
@@ -336,7 +351,9 @@ export async function POST(request: Request) {
       const values = status
         ? { webStatus: status, webAt: now, webBy: by, webReason: reason, webNotified: status === "cannot-test" && body.notified === true }
         : { webStatus: null, webAt: null, webBy: null, webReason: "", webNotified: false };
-      await db.update(goliveTickets).set(values).where(eq(goliveTickets.id, ticketId));
+      const write = db.update(goliveTickets).set(values).where(eq(goliveTickets.id, ticketId));
+      if (status === "failed") await db.batch([write, failureLog([{ ticketId, phase: "web", releaseId: ticket.releaseId, failedBy: by, failedAt: now }])]);
+      else await write;
       const web = await webPhase(db, ticket.releaseId);
       announceWebProgress(db, releaseName, before, web);
       return Response.json({ ...values, web });

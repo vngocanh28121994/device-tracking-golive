@@ -23,3 +23,8 @@ export function validRole(value: unknown): value is AccountRole | "" {
 export function canViewStatistic(role: string | undefined) {
   return isManager(role);
 }
+
+// The avatar badge is tiny, so long role names get a short label there; the full name stays in the
+// screen-reader text and everywhere else.
+const roleBadges: Record<string, string> = { "App Manager": "AppM" };
+export const roleBadge = (role: string | undefined | null) => (role ? roleBadges[role] || role : "");

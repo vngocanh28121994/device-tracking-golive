@@ -1014,7 +1014,9 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
   .golive-web-done { display: grid; grid-template-columns: auto 1fr; align-items: start; }
   .golive-web-done .golive-skip-button { grid-column: 2; justify-self: start; margin-left: 0; }
   .golive-web-done .golive-app-remind { grid-column: 1 / -1; margin-left: 0; width: 100%; justify-content: center; }
-  .golive-web-done .golive-push-actions { grid-column: 1 / -1; margin-left: 0; }
+  .golive-web-done .golive-push-actions { grid-column: 1 / -1; margin-left: 0; flex-wrap: nowrap; }
+  /* Two halves of the row: "Thu hồi push" stays inside the card instead of spilling past it. */
+  .golive-web-done .golive-push-actions > .golive-skip-button { flex: 1 1 50%; min-width: 0; justify-content: center; white-space: nowrap; }
 }
 
 /* "Không test được": reason, scrum-team status and its dialog */
@@ -1049,6 +1051,60 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
   .onboarding-banner { flex-wrap: wrap; align-items: flex-start; }
   .onboarding-banner > div { flex: 1 1 calc(100% - 34px); }
   .onboarding-banner .primary-button { width: 100%; margin-left: 0; justify-content: center; }
+}
+
+/* Statistic tab "QE": one row per QE, with the counts grouped under a Web and an App header. */
+.qe-filter { display: grid; gap: 10px; margin-bottom: 16px; }
+.qe-filter .filter-tabs { justify-self: start; }
+.qe-filter .history-filter-form { padding-bottom: 0; max-width: 460px; }
+.qe-table { min-width: 940px; }
+.qe-table th { padding: 10px 14px; vertical-align: bottom; }
+.qe-table td { padding: 11px 14px; vertical-align: middle; }
+/* The grouping row names a phase rather than a column, so it reads as a band above its four cells. */
+.qe-table th.qe-group { text-align: center; border-left: 1px solid var(--line); border-right: 1px solid var(--line); color: var(--accent); font-size: 11px; }
+.qe-table th.qe-sortable { padding: 0; }
+.qe-table th.qe-sortable button { display: flex; align-items: center; gap: 4px; width: 100%; min-height: 40px; padding: 10px 14px; border: 0; background: none; font: inherit; color: inherit; letter-spacing: inherit; cursor: pointer; }
+.qe-table th.qe-sortable button:hover { color: var(--accent); }
+.qe-table th.qe-sortable button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.qe-table th.is-sorted button { color: var(--accent); }
+/* Space the arrow will take, kept reserved so a header does not shift when it becomes the sorted one. */
+.qe-sort-hint { width: 13px; }
+/* The name column stays put while the counts scroll sideways, so a row never loses its owner. */
+.qe-table .qe-sticky { position: sticky; left: 0; z-index: 1; background: var(--surface); }
+.qe-table thead .qe-sticky { background: #f6f3f9; }
+.qe-table tbody tr:hover .qe-sticky { background: #fdfbff; }
+.qe-table .golive-assignee { min-width: 180px; }
+/* A figure column is read down its digits, so its header sits over them: row-reverse puts the
+   label itself hard against the right padding and moves the sort arrow to its left, where it
+   cannot push the label out of line with the numbers below. */
+.qe-table th.qe-right button { flex-direction: row-reverse; justify-content: flex-start; }
+.qe-table .qe-number, .qe-table .qe-time { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+/* One golive per line: the names say which releases the QE worked on, where a count said nothing. */
+.qe-table .qe-releases { min-width: 170px; display: table-cell; font-size: 12px; color: var(--muted); }
+.qe-table .qe-releases span { display: block; overflow-wrap: anywhere; }
+.qe-table .qe-releases span + span { margin-top: 2px; }
+.qe-blank { color: var(--muted); }
+.qe-table .qe-time { color: var(--muted); font-weight: 500; white-space: nowrap; }
+.qe-unmatched { display: block; margin-top: 3px; font-size: 11px; color: var(--muted); }
+.qe-notes { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
+@media (max-width: 900px) {
+  /* The QE table is a comparison across many columns: it scrolls sideways instead of stacking. */
+  .qe-scroll { overflow-x: auto; }
+  .qe-table { min-width: 860px; }
+  /* The sticky name column eats the width the figures need, so a long name wraps onto a second
+     line instead of widening the column. */
+  .qe-table .golive-assignee { min-width: 0; max-width: 150px; }
+  .qe-table .golive-assignee .holder-identity { align-items: flex-start; }
+  /* Wrap between words, not inside them: "anywhere" would let the column shrink to one letter
+     per line, which is what the width has to be measured against. */
+  .qe-table .golive-assignee .holder-name { overflow-wrap: break-word; }
+  .qe-table .qe-releases { min-width: 140px; }
+  .qe-table thead { display: table-header-group; }
+  .qe-filter .filter-tabs { justify-self: stretch; }
+  .qe-filter .history-filter-form { max-width: none; }
+  /* "Ticket được giao" is longer than any label on the golive tab: let it wrap instead of
+     running under its own number. */
+  .qe-summary .golive-stat .status-chip { white-space: normal; }
 }
 
 /* dark-theme:generated:start */
@@ -1160,6 +1216,9 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 :root[data-theme="dark"] .golive-completed { background: #2e4638; color: #bae6da; }
 :root[data-theme="dark"] .golive-skipped-failed { border-color: #59393c; background: #451e22; }
 :root[data-theme="dark"] .golive-skipped-failed .golive-skipped-label strong { color: #e5abb0; }
+:root[data-theme="dark"] .golive-table tr.golive-row-picked { background: #301e46; }
+:root[data-theme="dark"] .golive-bulk { border: 1px solid #453857; box-shadow: 0 8px 24px #150e1e14; }
+:root[data-theme="dark"] .golive-web-outcome { color: #bae6da; }
 :root[data-theme="dark"] .golive-fail-button { color: #e5abb0; }
 :root[data-theme="dark"] .golive-fail-button:hover { color: #e9b3b9; }
 :root[data-theme="dark"] .confirm-icon-failed { background: #4c1d1d; color: #e6a9b0; }
@@ -1190,11 +1249,18 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
 :root[data-theme="dark"] .stat-row-check { color: #b2e5d6; }
 :root[data-theme="dark"] .stat-table tr.stat-row-done { background: #273c2f; }
 :root[data-theme="dark"] .stat-fail-reason { color: #e5abb0; }
+:root[data-theme="dark"] .stat-phase-app { background: #523d1f; color: #e9d3b5; }
+:root[data-theme="dark"] .stat-phase-build { background: #22394f; color: #b3d1e9; }
+:root[data-theme="dark"] .stat-phase-completed { background: #2e4638; color: #bae6da; }
+:root[data-theme="dark"] .stat-web-done { color: #bae6da; }
+:root[data-theme="dark"] .stat-web-pending strong { color: #e5abb0; }
 :root[data-theme="dark"] .golive-web-mine { color: #bae6da; }
 :root[data-theme="dark"] .golive-web-done { border: 1px solid #3a5b49; background: #2e4638; color: #bfe9de; }
 :root[data-theme="dark"] .golive-web-done-text small { color: #bddcd3; }
 :root[data-theme="dark"] .golive-skip-notified { color: #eacfb6; background: #563f21; }
 :root[data-theme="dark"] .golive-skip-notified.is-notified { color: #bae6da; background: #2e4638; }
+:root[data-theme="dark"] .qe-table thead .qe-sticky { background: #332a3d; }
+:root[data-theme="dark"] .qe-table tbody tr:hover .qe-sticky { background: #2d1941; }
 /* dark-theme:generated:end */
 /* Hand-tuned dark rules: these win over the generated block above. */
 :root[data-theme="dark"] .filter-tabs { background: #0f0c13; border: 1px solid var(--line); }

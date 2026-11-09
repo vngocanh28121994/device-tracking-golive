@@ -39,6 +39,10 @@ Kiểm tra API local (dev server đang chạy, đã áp dụng migration):
 node tests/manual-golive.integration.mjs /absolute/path/to/.wrangler/state/v3/d1/miniflare-D1DatabaseObject/database.sqlite
 ```
 
+```sh
+node tests/golive-failures.integration.mjs /absolute/path/to/.wrangler/state/v3/d1/miniflare-D1DatabaseObject/database.sqlite
+```
+
 Bài kiểm tra tạo dữ liệu tạm trong D1 local rồi dọn lại; không dùng với database production.
 
 Site đã được liên kết qua `project_id` trong `.openai/hosting.json`. Không thêm `origin` hoặc token deploy vào Git config hay file `.env`.

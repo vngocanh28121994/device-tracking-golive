@@ -196,3 +196,172 @@ console.log("Statistic test-failed: outstanding rather than Done, and its own ma
   const manual = webProgress({ ...release, source: "manual" }, profiles, ["QE", "QEM"], tickets, [{ userId: "b", signedAt: webAt }]);
   assert.deepEqual(manual.signed, { b: webAt });
 }
+
+// ===== Tab "QE": qeScorecard over several golive releases =====
+{
+  const { qeScorecard } = await import("../app/lib/statistic.ts");
+  const { matchAccount, normalizeName } = await import("../app/lib/golive.ts");
+  const profiles = [
+    { userId: "u_anh", displayName: "Minh Anh", role: "QE" },
+    { userId: "u_bao", displayName: "Gia Bảo", role: "QEM" },
+    { userId: "u_quiet", displayName: "Lặng Lẽ", role: "QE" },
+    { userId: "u_dev", displayName: "Dev Khoa", role: "DEV" },
+    { userId: "u_mgr", displayName: "Quản Lý", role: "Manager" },
+  ];
+  const csv = { id: "r1", name: "Golive 01/11", source: "csv", createdAt: "2026-11-01T01:00:00.000Z", appPushedAt: "2026-11-01T03:00:00.000Z" };
+  // Migration 0022 stamped this release's push time with its own creation time: no app durations.
+  const old = { id: "r2", name: "Golive 01/10", source: "csv", createdAt: "2026-10-01T01:00:00.000Z", appPushedAt: "2026-10-01T01:00:00.000Z" };
+  const manual = { id: "r3", name: "Golive tay 02/11", source: "manual", createdAt: "2026-11-02T01:00:00.000Z", appPushedAt: null };
+  const base = { skippedAt: null, skippedBy: null, skipKind: "not-needed", failedAt: null, testedDevices: 0, lastCheckedAt: null, webStatus: null, webAt: null, doneAt: null };
+  const t = (id, releaseId, assignee, assigneeUserId, extra = {}) => ({ ...base, id, releaseId, assignee, assigneeUserId, ...extra });
+  const run = (tickets, failures = [], releases = [csv, old, manual]) =>
+    qeScorecard({ releases, tickets, failures, profiles, qeRoles: ["QE", "QEM"], matchAccount, normalizeName });
+
+  // Tested and skipped are separate columns in both phases, and the two never overlap.
+  {
+    const report = run([
+      t(1, "r1", "Minh Anh", "u_anh", { webStatus: "tested", webAt: "2026-11-01T02:00:00.000Z", doneAt: "2026-11-01T04:00:00.000Z", lastCheckedAt: "2026-11-01T04:00:00.000Z" }),
+      t(2, "r1", "Minh Anh", "u_anh", { webStatus: "not-needed", doneAt: "2026-11-01T05:00:00.000Z", skippedAt: "2026-11-01T05:00:00.000Z", skipKind: "not-needed" }),
+      t(3, "r1", "Minh Anh", "u_anh", { webStatus: "cannot-test", doneAt: "2026-11-01T06:00:00.000Z", skippedAt: "2026-11-01T06:00:00.000Z", skipKind: "cannot-test" }),
+      // "Xác nhận đã test xong" is real testing, so it belongs with the device-ticked ones.
+      t(4, "r1", "Minh Anh", "u_anh", { doneAt: "2026-11-01T07:00:00.000Z", skippedAt: "2026-11-01T07:00:00.000Z", skipKind: "tested" }),
+      t(5, "r1", "Minh Anh", "u_anh", {}),
+    ]);
+    const row = report.rows.find(item => item.userId === "u_anh");
+    assert.equal(row.assigned, 5);
+    assert.equal(row.open, 1);
+    assert.deepEqual([row.web.tested, row.web.skipped], [1, 2]);
+    assert.deepEqual([row.app.tested, row.app.skipped], [2, 2]);
+    // Web: 01:00 → 02:00. App: pushed 03:00 → marked 04:00 and 07:00, so 2.5 hours on average.
+    assert.equal(row.web.avgMs, 3600000);
+    assert.equal(row.app.samples, 2);
+    assert.equal(row.app.avgMs, 2.5 * 3600000);
+    assert.equal(report.releases, 3);
+    assert.equal(report.qeAccounts, 3);
+  }
+
+  // A manual release has no real tickets: it only proves the QE took part in that release.
+  {
+    const report = run([
+      t(10, "r3", "Minh Anh", "u_anh", { doneAt: "2026-11-02T02:00:00.000Z", lastCheckedAt: "2026-11-02T02:00:00.000Z" }),
+      t(11, "r1", "Minh Anh", "u_anh", { webStatus: "tested", webAt: "2026-11-01T02:00:00.000Z" }),
+    ], [{ ticketId: 10, phase: "app" }]);
+    const row = report.rows.find(item => item.userId === "u_anh");
+    assert.equal(row.releases, 2);
+    // The column names the golives themselves, newest first, manual ones included.
+    assert.deepEqual(row.releaseNames, ["Golive tay 02/11", "Golive 01/11"]);
+    assert.equal(row.assigned, 1);
+    assert.equal(row.open, 1);
+    assert.equal(row.app.tested, 0);
+    assert.equal(row.app.failed, 0);
+  }
+
+  // Grouping: the account wins over the written name, and an unmatched name keeps its own row last.
+  {
+    const report = run([
+      t(20, "r1", "Minh  Anh", null, { webStatus: "tested", webAt: "2026-11-01T02:00:00.000Z" }),
+      t(21, "r1", "minh anh", null, {}),
+      t(22, "r1", "Người Lạ", null, {}),
+      t(23, "r1", "nguời lạ ", null, {}),
+      t(24, "r1", "", null, {}),
+      t(25, "r3", "", null, {}),
+    ]);
+    const anh = report.rows.find(item => item.userId === "u_anh");
+    assert.equal(anh.assigned, 2);
+    assert.equal(anh.name, "Minh Anh");
+    // Only a CSV ticket without a tester is reported as uncounted; a manual placeholder is not one.
+    assert.equal(report.unassignedTickets, 1);
+    const last = report.rows[report.rows.length - 1];
+    assert.equal(last.matched, false);
+    assert.equal(last.assigned, 1);
+    assert.equal(report.rows.filter(item => !item.matched).length, 2);
+  }
+
+  // Every QE account is listed, even one with nothing in the period; a DEV with tickets is too.
+  {
+    const report = run([t(30, "r1", "Dev Khoa", "u_dev", {})]);
+    const quiet = report.rows.find(item => item.userId === "u_quiet");
+    assert.equal(quiet.assigned, 0);
+    assert.equal(quiet.releases, 0);
+    assert.deepEqual(quiet.releaseNames, []);
+    assert.equal(quiet.web.avgMs, null);
+    assert.equal(quiet.app.avgMs, null);
+    const dev = report.rows.find(item => item.userId === "u_dev");
+    assert.equal(dev.role, "DEV");
+    assert.equal(dev.open, 1);
+    assert.ok(!report.rows.some(item => item.userId === "u_mgr"));
+  }
+
+  // Failed then passed: the ticket counts in both columns, and the mark is credited to the ticket's
+  // own tester even though a Manager pressed it.
+  {
+    const report = run([
+      t(40, "r1", "Gia Bảo", "u_bao", { webStatus: "tested", webAt: "2026-11-01T02:00:00.000Z", doneAt: "2026-11-01T04:00:00.000Z", lastCheckedAt: "2026-11-01T04:00:00.000Z" }),
+    ], [{ ticketId: 40, phase: "web" }, { ticketId: 40, phase: "app" }]);
+    const row = report.rows.find(item => item.userId === "u_bao");
+    assert.equal(row.web.failed, 1); assert.equal(row.web.tested, 1);
+    assert.equal(row.app.failed, 1); assert.equal(row.app.tested, 1);
+    assert.equal(row.open, 0);
+  }
+
+  // Unusable samples are dropped, not counted as zero: an old release's push time, a web mark that
+  // predates the release, and an unparseable stamp. The counts themselves still include the tickets.
+  {
+    const report = run([
+      t(50, "r2", "Minh Anh", "u_anh", { webStatus: "tested", webAt: "2026-10-01T02:00:00.000Z", doneAt: "2026-10-01T05:00:00.000Z", lastCheckedAt: "2026-10-01T05:00:00.000Z" }),
+      t(51, "r1", "Minh Anh", "u_anh", { webStatus: "tested", webAt: "2026-10-31T23:00:00.000Z" }),
+      t(52, "r1", "Minh Anh", "u_anh", { webStatus: "tested", webAt: "không rõ" }),
+    ]);
+    const row = report.rows.find(item => item.userId === "u_anh");
+    assert.equal(row.web.tested, 3);
+    assert.equal(row.web.samples, 1);
+    assert.equal(row.web.avgMs, 3600000);
+    assert.equal(row.app.tested, 1);
+    assert.equal(row.app.samples, 0);
+    assert.equal(row.app.avgMs, null);
+  }
+
+  // Default order: most tested first, then the name in Vietnamese, with unmatched names last.
+  {
+    const report = run([
+      t(60, "r1", "Minh Anh", "u_anh", {}),
+      t(61, "r1", "Gia Bảo", "u_bao", { webStatus: "tested", webAt: "2026-11-01T02:00:00.000Z" }),
+      t(62, "r1", "Người Lạ", null, { webStatus: "tested", webAt: "2026-11-01T02:00:00.000Z" }),
+    ]);
+    assert.deepEqual(report.rows.map(item => item.name), ["Gia Bảo", "Lặng Lẽ", "Minh Anh", "Người Lạ"]);
+  }
+  console.log("Statistic QE scorecard: tested vs skipped, manual releases, grouping, failures and dropped samples.");
+}
+
+// Sorting and the duration labels of the QE table.
+{
+  const { sortRows, prettyDuration, rangeDates } = await import("../app/lib/qe-table.ts");
+  assert.equal(prettyDuration(null), "—");
+  assert.equal(prettyDuration(0), "0p");
+  assert.equal(prettyDuration(45 * 60000), "45p");
+  assert.equal(prettyDuration(59.6 * 60000), "1g 0p");
+  assert.equal(prettyDuration((3 * 60 + 20) * 60000), "3g 20p");
+  assert.equal(prettyDuration((2 * 24 + 4) * 3600000), "2n 4g");
+
+  const row = (name, matched, avgMs, tested) => ({
+    key: name, name, userId: matched ? name : null, role: "QE", matched,
+    releases: 1, releaseNames: ["Golive 01/11"], assigned: tested, open: 0,
+    web: { tested, skipped: 0, failed: 0, avgMs, samples: avgMs === null ? 0 : 1 },
+    app: { tested: 0, skipped: 0, failed: 0, avgMs: null, samples: 0 },
+  });
+  const rows = [row("An", true, 2000, 1), row("Bình", true, null, 3), row("Cường", true, 1000, 2), row("Lạ", false, 500, 9)];
+  // A missing average sits at the bottom either way round, and an unmatched name below everyone.
+  assert.deepEqual(sortRows(rows, "web.avgMs", "asc").map(item => item.name), ["Cường", "An", "Bình", "Lạ"]);
+  assert.deepEqual(sortRows(rows, "web.avgMs", "desc").map(item => item.name), ["An", "Cường", "Bình", "Lạ"]);
+  assert.deepEqual(sortRows(rows, "web.tested", "desc").map(item => item.name), ["Bình", "Cường", "An", "Lạ"]);
+  assert.deepEqual(sortRows(rows, "name", "asc").map(item => item.name), ["An", "Bình", "Cường", "Lạ"]);
+  assert.deepEqual(sortRows(rows, "", "desc").map(item => item.name), rows.map(item => item.name));
+
+  // Every fixed period ends with today in Vietnam and counts today as one of its days.
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh" }).format(new Date());
+  const span = range => (Date.parse(today) - Date.parse(rangeDates(range, { from: "", to: "" }).from)) / 86400000 + 1;
+  assert.equal(rangeDates("30d", { from: "", to: "" }).to, today);
+  assert.deepEqual([span("7d"), span("30d"), span("90d")], [7, 30, 90]);
+  assert.deepEqual(rangeDates("custom", { from: "2026-01-02", to: "2026-03-04" }), { from: "2026-01-02", to: "2026-03-04" });
+  console.log("Statistic QE table: durations, column sorting with blanks last, and period bounds.");
+}
