@@ -17,6 +17,7 @@ import { AppPushDialog, RetestCandidate } from "./AppPushDialog";
 import { RiskAcceptDialog } from "./RiskAcceptDialog";
 import { WaiveDeviceDialog } from "./WaiveDeviceDialog";
 import { GoliveSignoffDialog, SignoffSummary } from "./GoliveSignoffDialog";
+import { GoliveAttentionPanel } from "./GoliveAttentionPanel";
 import { attentionList, retestChoices } from "../lib/golive-acceptance";
 import { doneKindOf } from "../lib/statistic";
 
@@ -621,7 +622,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
         </div>
         {current.completedAt && (current.signoffNote || attention.items.length > 0) && <section className="panel golive-signoff-panel">
           {current.signoffNote && <><h3>Ghi chú nghiệm thu</h3><p>{current.signoffNote}</p></>}
-          {attention.items.length > 0 && <><h3>Cần lưu ý ({attention.items.length})</h3><ul>{attention.items.map(item => <li key={item.ticketId}><strong>{item.issueKey}</strong> <span className="muted">{item.assignee}</span><ul>{item.reasons.map((reason, index) => <li key={index}>{reason.text}</li>)}</ul></li>)}</ul></>}
+          {attention.items.length > 0 && <GoliveAttentionPanel items={attention.items} releaseId={current.id} />}
         </section>}
         {webPanel}
         <div className="golive-stats">{counts.map(([status, count]) => <button key={status} className={"golive-stat " + (statusFilter === status ? "active" : "")} aria-pressed={statusFilter === status} onClick={() => setStatusFilter(statusFilter === status ? "__all__" : status)}><span className={statusClass(status)}>{status}</span><strong>{count}</strong><small>{statusFilter === status ? "Đang lọc · bấm để bỏ" : (tickets.length ? Math.round(count / tickets.length * 100) : 0) + "% trên " + tickets.length + " " + rowLabel}</small></button>)}</div>

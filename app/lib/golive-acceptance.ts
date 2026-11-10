@@ -55,6 +55,29 @@ export const SYSTEM_ACTOR = { userId: null, name: "Hệ thống" };
 
 export type AttentionKind = "cannot-test" | "not-notified" | "risk-accepted" | "old-build" | "waived";
 export type AttentionItem = { ticketId: number; issueKey: string; assignee: string; reasons: { kind: AttentionKind; text: string }[] };
+
+// Thứ tự hiển thị và nhãn ngắn của từng loại lý do cần lưu ý.
+export const ATTENTION_KINDS: AttentionKind[] = ["cannot-test", "not-notified", "risk-accepted", "old-build", "waived"];
+export const ATTENTION_KIND_LABELS: Record<AttentionKind, string> = {
+  "cannot-test": "Không test được",
+  "not-notified": "Chưa báo scrum team",
+  "risk-accepted": "Chấp nhận rủi ro",
+  "old-build": "Kết quả build cũ",
+  waived: "Miễn máy",
+};
+export const ATTENTION_ALL = "__all__";
+export const ATTENTION_NO_ASSIGNEE = "__none__";
+
+// Lọc danh sách cần lưu ý theo QE và loại lý do; hai điều kiện kết hợp AND.
+// assignee "__none__" là ticket chưa có người test. Thứ tự items và reasons của mỗi item giữ nguyên.
+export function filterAttention(items: AttentionItem[], filter: { assignee: string; kind: string }): AttentionItem[] {
+  return items.filter(item => {
+    const assignee = (item.assignee || "").trim();
+    const byAssignee = filter.assignee === ATTENTION_ALL ? true : filter.assignee === ATTENTION_NO_ASSIGNEE ? assignee === "" : assignee === filter.assignee;
+    const byKind = filter.kind === ATTENTION_ALL ? true : item.reasons.some(reason => reason.kind === filter.kind);
+    return byAssignee && byKind;
+  });
+}
 type AttentionTicket = { id: number; issueKey: string; assignee: string; skippedAt: string | null; skipKind: string; skipReason: string; skipNotified: boolean; failedReason: string; webStatus: string | null; webReason: string; webNotified: boolean; appBuildId: number | null; doneAt: string | null };
 // Kinds that make the Ghi chú nghiệm thu mandatory; old-build and waived are shown but optional.
 const NOTE_KINDS: AttentionKind[] = ["cannot-test", "not-notified", "risk-accepted"];

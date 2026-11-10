@@ -1677,3 +1677,37 @@ body .golive-skip-actions .golive-skip-button svg { flex: none; }
 .golive-signoff-panel { margin: 12px 0; padding: 14px 16px; }
 .golive-signoff-panel h3 { margin: 0 0 6px; font-size: 14px; }
 .golive-signoff-panel ul { margin: 0; padding-left: 18px; font-size: 13px; }
+.golive-signoff-panel .golive-attention { margin-top: 10px; }
+.golive-signoff-panel .golive-attention ul { padding-left: 0; }
+.golive-attention-toggle { font-size: 11px; }
+.golive-attention-toggle > svg:last-child { margin-left: 4px; }
+.golive-attention-toggle small { margin-left: auto; }
+.golive-attention.is-open .golive-attention-toggle > svg:last-child { transform: rotate(180deg); }
+.golive-attention-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 10px 0 4px; }
+.golive-attention-qe { min-width: 210px; }
+.golive-attention-kinds { display: flex; gap: 6px; max-width: 100%; overflow-x: auto; }
+.golive-attention-kinds button { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.golive-attention-kinds button:hover { color: var(--accent); border-color: var(--accent); }
+.golive-attention-kinds button.active { background: var(--lavender); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.golive-attention-kinds button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.golive-attention-all { margin-left: auto; }
+.golive-attention-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.golive-attention-row { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 42px; padding: 7px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.golive-attention-row:hover { border-color: var(--accent); }
+.golive-attention-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.golive-attention-row .muted { color: var(--muted); }
+.golive-attention-row .golive-attention-count { margin-left: auto; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.golive-attention-row > svg:last-child { flex: 0 0 auto; color: var(--muted); transition: transform .18s ease; }
+.golive-attention-list li.is-open .golive-attention-row > svg:last-child { transform: rotate(180deg); }
+.golive-attention-reasons { list-style: none; margin: 4px 0 8px; padding: 0 12px; display: grid; gap: 6px; font-size: 13px; }
+.golive-attention-reasons li { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+.golive-attention .empty { padding: 20px 12px; }
+:root[data-theme="dark"] .golive-attention-kinds button.active { background: #2e2440; }
+@media (max-width: 640px) {
+  .golive-attention-qe { flex: 1 1 100%; min-width: 0; }
+  .golive-attention-kinds { flex: 1 1 100%; }
+  .golive-attention-all { margin-left: 0; }
+  .golive-attention-row { flex-wrap: wrap; }
+  .golive-attention-row strong { flex: 1 1 100%; }
+  .golive-attention-row .muted { flex: 1 1 auto; }
+}

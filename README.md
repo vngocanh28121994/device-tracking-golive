@@ -59,7 +59,7 @@ node tests/golive-acceptance.integration.mjs /absolute/path/to/.wrangler/state/v
 node tests/golive-failures.integration.mjs /absolute/path/to/.wrangler/state/v3/d1/miniflare-D1DatabaseObject/database.sqlite
 ```
 
-Bài kiểm tra tạo dữ liệu tạm trong D1 local rồi dọn lại; không dùng với database production. `golive-import.integration.mjs` cần sẵn một tài khoản role QE hoặc QEM trong D1 local (CSV mẫu lấy tên người test từ tài khoản đó). Các test unit chạy trực tiếp: `node tests/golive-retest.test.mjs`.
+Bài kiểm tra tạo dữ liệu tạm trong D1 local rồi dọn lại; không dùng với database production. `golive-import.integration.mjs` cần sẵn một tài khoản role QE hoặc QEM trong D1 local (CSV mẫu lấy tên người test từ tài khoản đó). Các test unit chạy trực tiếp: `node tests/golive-retest.test.mjs`, `node tests/golive-attention.test.mjs`.
 
 Site đã được liên kết qua `project_id` trong `.openai/hosting.json`. Không thêm `origin` hoặc token deploy vào Git config hay file `.env`.
 
