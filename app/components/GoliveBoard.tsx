@@ -531,6 +531,7 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
   const mineCount = tickets.filter(item => item.assigneeUserId === currentUserId).length;
   // Bulk updates need tickets, so a manual golive and a completed one have no checkbox column.
   const bulkOn = !manual && !!current && !current.completedAt && !waitingBuild;
+  const minePickable = bulkOn ? tickets.filter(item => item.assigneeUserId === currentUserId && canSkip(item)) : [];
   const pickable = bulkOn ? visible.filter(canSkip) : [];
   const pickedVisible = pickable.filter(item => picked.includes(item.id));
   const pickedCount = picked.filter(id => tickets.some(item => item.id === id && canSkip(item))).length;
@@ -649,6 +650,11 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
           <span>Hiển thị <strong>{visible.length}</strong>/{tickets.length} {rowLabel}{mineOnly ? " của tôi" : ""}</span>
           {filtered && <button type="button" className="text-button golive-clear" onClick={() => { resetFilters(); setMineOnly(false); }}><X size={15} /> Xoá lọc</button>}
         </div>
+        {minePickable.length > 0 && <div className="golive-select-row">
+          <button type="button" className="outline-button" disabled={busy} onClick={() => { resetFilters(); setMineOnly(true); setPicked(minePickable.map(item => item.id)); }}>
+            <Check size={16} aria-hidden="true" /> Chọn tất cả ticket của tôi ({minePickable.length})
+          </button>
+        </div>}
         {bulkOn && pickedCount > 0 && <div className="golive-bulk" role="region" aria-label="Cập nhật hàng loạt">
           <span className="golive-bulk-count">Đã chọn <strong>{pickedCount}</strong> ticket · cập nhật {appPhase ? <><Smartphone size={14} aria-hidden="true" /> Phase app</> : <><Globe size={14} aria-hidden="true" /> Phase web</>}:</span>
           <div className="golive-bulk-actions">

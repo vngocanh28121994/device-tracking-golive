@@ -1534,6 +1534,7 @@ body .golive-filters input::placeholder { color: var(--muted); opacity: .8; font
 .golive-result-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 36px; margin-bottom: 12px; font-size: 13px; color: var(--muted); }
 .golive-result-line strong { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
 .golive-result-line .golive-clear { width: auto; height: auto; min-height: 36px; padding: 6px 0 6px 8px; font-size: 13px; }
+.golive-select-row { display: flex; justify-content: flex-end; margin-bottom: 12px; }
 :root[data-theme="dark"] .golive-scope-count { background: #3a2f4d; }
 :root[data-theme="dark"] .golive-scope button.active { box-shadow: none; }
 @media (max-width: 900px) {
@@ -1551,6 +1552,7 @@ body .golive-filters input::placeholder { color: var(--muted); opacity: .8; font
   body .golive-filters input { font-size: 16px; }
   .golive-result-line { font-size: 14px; margin-bottom: 10px; }
   .golive-result-line .golive-clear { font-size: 14px; }
+  .golive-select-row .outline-button { width: 100%; white-space: normal; }
 }
 
 /* Locked phase box (all widths): a "Chưa mở" pill with a lock, then why and when it opens. */
