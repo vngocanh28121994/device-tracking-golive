@@ -749,6 +749,9 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
   .signin-banner { align-items: stretch; flex-direction: column; padding: 16px; }
   .toast { left: 12px; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); max-width: none; }
 }
+@media (max-width: 600px) {
+  .golive-stats.golive-stats { grid-template-columns: minmax(0, 1fr); }
+}
 
 /* Golive: tickets marked as not needing a test */
 .golive-skipped { display: flex; flex-direction: column; align-items: flex-start; text-align: left; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--canvas); }
@@ -1016,9 +1019,9 @@ th:last-child, td:last-child { text-align: right; width: 90px; }
   .golive-web-done { display: grid; grid-template-columns: auto 1fr; align-items: start; }
   .golive-web-done .golive-skip-button { grid-column: 2; justify-self: start; margin-left: 0; }
   .golive-web-done .golive-app-remind { grid-column: 1 / -1; margin-left: 0; width: 100%; justify-content: center; }
-  .golive-web-done .golive-push-actions { grid-column: 1 / -1; margin-left: 0; flex-wrap: nowrap; }
-  /* Two halves of the row: "Thu hồi push" stays inside the card instead of spilling past it. */
-  .golive-web-done .golive-push-actions > .golive-skip-button { flex: 1 1 50%; min-width: 0; justify-content: center; white-space: nowrap; }
+  .golive-web-done .golive-push-actions { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-left: 0; }
+  .golive-web-done .golive-push-actions > .golive-skip-button { grid-column: auto; width: 100%; min-width: 0; justify-content: center; white-space: normal; }
+  .golive-web-done .golive-push-actions > .golive-skip-button:first-child { grid-column: 1 / -1; }
 }
 
 /* "Không test được": reason, scrum-team status and its dialog */
