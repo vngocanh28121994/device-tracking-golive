@@ -451,3 +451,18 @@ console.log("Statistic test-failed: outstanding rather than Done, and its own ma
   assert.deepEqual(rangeDates("custom", { from: "2026-01-02", to: "2026-03-04" }), { from: "2026-01-02", to: "2026-03-04" });
   console.log("Statistic QE table: durations, column sorting with blanks last, and period bounds.");
 }
+
+// Sign-off device coverage: one entry per device; tested once ticked anywhere, untested while owed.
+{
+  const { deviceCoverage } = await import("../app/lib/golive-signoff.ts");
+  const tickets = [{ id: 1, issueKey: "ON-1", assignee: "An" }, { id: 2, issueKey: "ON-2", assignee: "An" }, { id: 3, issueKey: "ON-3", assignee: "Bình" }];
+  const req = (ticketId, deviceId, extra = {}) => ({ ticketId, deviceId, deviceName: { d1: "iPhone 15", d2: "Galaxy S23", d3: "iPad Air", d4: "Pixel 8" }[deviceId], waivedReason: "", waivedAt: null, archived: false, ...extra });
+  const out = deviceCoverage({
+    required: [req(1, "d1"), req(1, "d2"), req(2, "d1"), req(3, "d3", { waivedAt: "x", waivedReason: "Máy hỏng" }), req(3, "d4", { archived: true })],
+    checks: [{ ticketId: 1, deviceId: "d1", deviceName: "iPhone 15", checkedByUserId: "u1" }, { ticketId: 2, deviceId: "d1", deviceName: "iPhone 15", checkedByUserId: "u1" }],
+    tickets, nameOf: id => ({ u1: "An" })[id] || "",
+  });
+  assert.deepEqual(out.tested.map(d => [d.name, d.tickets.map(t => t.issueKey), d.testers]), [["iPhone 15", ["ON-1", "ON-2"], ["An"]]]);
+  assert.deepEqual(out.untested.map(d => [d.name, d.tickets.map(t => t.issueKey), d.waived]), [["Galaxy S23", ["ON-1"], []], ["iPad Air", ["ON-3"], ["Máy hỏng"]]]);
+  console.log("Sign-off devices: tested once ticked anywhere, untested while still owed, archived left out.");
+}

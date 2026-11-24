@@ -1,25 +1,59 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { CheckCircle2, Globe, ShieldAlert, Smartphone, X } from "lucide-react";
+import { CheckCircle2, ChevronDown, Globe, ShieldAlert, Smartphone, X } from "lucide-react";
 import { ATTENTION_KIND_LABELS, AttentionItem } from "../lib/golive-acceptance";
+import { DeviceDetail, TicketDetail } from "../lib/golive-signoff";
 
 export type SignoffSummary = {
   name: string; fixVersion: string; build: string; qeCount: number; manual: boolean;
   web: { tested: number; notNeeded: number; cannotTest: number; riskAccepted: number };
-  app: { onDevices: number; confirmed: number; notNeeded: number; cannotTest: number; riskAccepted: number };
+  app: { devicesTested: number; devicesUntested: number; confirmed: number; notNeeded: number; cannotTest: number; riskAccepted: number };
+  appTickets: number;
+  details: {
+    webCannotTest: TicketDetail[]; webRiskAccepted: TicketDetail[]; appCannotTest: TicketDetail[]; appRiskAccepted: TicketDetail[];
+    devicesTested: DeviceDetail[]; devicesUntested: DeviceDetail[];
+  };
   attention: AttentionItem[]; noteRequired: boolean;
 };
 
-// A count row; "warn" marks outcomes a Manager should look at twice when they are not zero.
-type CountRow = { label: string; value: number; warn?: boolean };
+// A count row; "warn" marks outcomes a Manager should look at twice when they are not zero, and
+// "detail" is what opens under the row when its number is clicked.
+type CountRow = { id: string; label: string; value: number; warn?: boolean; unit?: string; detail?: React.ReactNode };
 
-function PhaseCounts({ kind, title, rows }: { kind: "web" | "app"; title: string; rows: CountRow[] }) {
-  const total = rows.reduce((sum, row) => sum + row.value, 0);
+function TicketList({ items }: { items: TicketDetail[] }) {
+  return <ul className="signoff-detail-list">{items.map(item => <li key={item.ticketId}>
+    <div className="signoff-detail-title"><strong>{item.issueKey}</strong><span>{item.assignee || "Chưa có người test"}</span></div>
+    {item.reason && <p>{item.reason}</p>}
+    {item.note && <small className={item.note.startsWith("Chưa") ? "is-warn" : ""}>{item.note}</small>}
+  </li>)}</ul>;
+}
+
+function DeviceList({ items, tested }: { items: DeviceDetail[]; tested: boolean }) {
+  return <ul className="signoff-detail-list">{items.map(item => <li key={item.deviceId}>
+    <div className="signoff-detail-title"><strong className="signoff-device-name">{item.name}</strong>
+      <span>{tested ? item.tickets.length + " ticket" : "Cần cho " + item.tickets.length + " ticket"}</span></div>
+    {item.tickets.length > 0 && <p>{item.tickets.map(ticket => ticket.issueKey).join(", ")}</p>}
+    {tested && item.testers.length > 0 && <small>Người test: {item.testers.join(", ")}</small>}
+    {!tested && item.waived.map(reason => <small key={reason}>Miễn máy: {reason}</small>)}
+  </li>)}</ul>;
+}
+
+function PhaseCounts({ kind, title, total, rows, openId, onToggle }: { kind: "web" | "app"; title: string; total: number; rows: CountRow[]; openId: string; onToggle: (id: string) => void }) {
   const Icon = kind === "web" ? Globe : Smartphone;
   return <section className={"signoff-phase signoff-phase-" + kind}>
     <header className="signoff-phase-head"><span className="signoff-phase-icon" aria-hidden="true"><Icon size={16} /></span><h3>{title}</h3><small>{total} ticket</small></header>
-    <dl className="signoff-counts">{rows.map(row => <div key={row.label} className={row.value === 0 ? "is-zero" : row.warn ? "is-warn" : ""}>
-      <dt>{row.label}</dt><dd>{row.value}</dd></div>)}</dl>
+    <dl className="signoff-counts">{rows.map(row => {
+      const clickable = !!row.detail && row.value > 0, open = clickable && openId === row.id;
+      return <div key={row.id} className={"signoff-count-row" + (row.value === 0 ? " is-zero" : row.warn ? " is-warn" : "") + (open ? " is-open" : "")}>
+        <dt>{row.label}</dt>
+        <dd>{clickable
+          ? <button type="button" className="signoff-count-button" aria-expanded={open} aria-controls={"signoff-detail-" + row.id}
+            aria-label={row.label + ": " + row.value + (row.unit ? " " + row.unit : "") + ", " + (open ? "ẩn" : "xem") + " chi tiết"} onClick={() => onToggle(row.id)}>
+            {row.value}<ChevronDown size={14} aria-hidden="true" /></button>
+          : row.value}</dd>
+        {open && <div id={"signoff-detail-" + row.id} className="signoff-detail" role="region" aria-label={"Chi tiết " + row.label}>{row.detail}</div>}
+      </div>;
+    })}</dl>
   </section>;
 }
 
@@ -29,6 +63,9 @@ function PhaseCounts({ kind, title, rows }: { kind: "web" | "app"; title: string
 export function GoliveSignoffDialog({ summary, busy, onCancel, onSubmit }: { summary: SignoffSummary; busy: boolean; onCancel: () => void; onSubmit: (note: string) => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [note, setNote] = useState("");
+  // One detail bubble open at a time; clicking its number again or pressing Escape closes it.
+  const [openId, setOpenId] = useState("");
+  const toggle = (id: string) => setOpenId(current => current === id ? "" : id);
   useEffect(() => {
     const element = dialog.current;
     element?.showModal();
@@ -37,7 +74,7 @@ export function GoliveSignoffDialog({ summary, busy, onCancel, onSubmit }: { sum
   const trimmed = note.trim(), blocked = summary.noteRequired && !trimmed;
   const attentionCount = summary.attention.length;
   return <dialog ref={dialog} className="modal signoff-dialog" aria-labelledby="signoff-title"
-    onCancel={event => { event.preventDefault(); onCancel(); }}
+    onCancel={event => { event.preventDefault(); if (openId) setOpenId(""); else onCancel(); }}
     onMouseDown={event => { if (event.target === event.currentTarget) onCancel(); }}>
     <form className="signoff-form" onSubmit={event => { event.preventDefault(); if (!blocked) onSubmit(trimmed); }}>
       <header className="signoff-head">
@@ -55,18 +92,20 @@ export function GoliveSignoffDialog({ summary, busy, onCancel, onSubmit }: { sum
         </dl>
 
         <div className={"signoff-phases" + (summary.manual ? " is-single" : "")}>
-          {!summary.manual && <PhaseCounts kind="web" title="Phase web" rows={[
-            { label: "Đã test", value: summary.web.tested },
-            { label: "Không cần test", value: summary.web.notNeeded },
-            { label: "Không test được", value: summary.web.cannotTest, warn: true },
-            { label: "Chấp nhận rủi ro", value: summary.web.riskAccepted, warn: true },
+          {!summary.manual && <PhaseCounts kind="web" title="Phase web" openId={openId} onToggle={toggle}
+            total={summary.web.tested + summary.web.notNeeded + summary.web.cannotTest + summary.web.riskAccepted} rows={[
+            { id: "web-tested", label: "Đã test", value: summary.web.tested },
+            { id: "web-not-needed", label: "Không cần test", value: summary.web.notNeeded },
+            { id: "web-cannot-test", label: "Không test được", value: summary.web.cannotTest, warn: true, unit: "ticket", detail: <TicketList items={summary.details.webCannotTest} /> },
+            { id: "web-risk", label: "Chấp nhận rủi ro", value: summary.web.riskAccepted, warn: true, unit: "ticket", detail: <TicketList items={summary.details.webRiskAccepted} /> },
           ]} />}
-          <PhaseCounts kind="app" title="Phase app" rows={[
-            { label: "Test đủ thiết bị", value: summary.app.onDevices },
-            { label: "Xác nhận đã test", value: summary.app.confirmed },
-            { label: "Không cần test", value: summary.app.notNeeded },
-            { label: "Không test được", value: summary.app.cannotTest, warn: true },
-            { label: "Chấp nhận rủi ro", value: summary.app.riskAccepted, warn: true },
+          <PhaseCounts kind="app" title="Phase app" openId={openId} onToggle={toggle} total={summary.appTickets} rows={[
+            { id: "app-devices-tested", label: "Thiết bị đã test", value: summary.app.devicesTested, unit: "thiết bị", detail: <DeviceList items={summary.details.devicesTested} tested /> },
+            { id: "app-devices-untested", label: "Thiết bị chưa test", value: summary.app.devicesUntested, warn: true, unit: "thiết bị", detail: <DeviceList items={summary.details.devicesUntested} tested={false} /> },
+            { id: "app-confirmed", label: "Xác nhận đã test", value: summary.app.confirmed },
+            { id: "app-not-needed", label: "Không cần test", value: summary.app.notNeeded },
+            { id: "app-cannot-test", label: "Không test được", value: summary.app.cannotTest, warn: true, unit: "ticket", detail: <TicketList items={summary.details.appCannotTest} /> },
+            { id: "app-risk", label: "Chấp nhận rủi ro", value: summary.app.riskAccepted, warn: true, unit: "ticket", detail: <TicketList items={summary.details.appRiskAccepted} /> },
           ]} />
         </div>
 

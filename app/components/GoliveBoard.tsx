@@ -17,6 +17,7 @@ import { AppPushDialog, RetestCandidate } from "./AppPushDialog";
 import { RiskAcceptDialog } from "./RiskAcceptDialog";
 import { WaiveDeviceDialog } from "./WaiveDeviceDialog";
 import { GoliveSignoffDialog, SignoffSummary } from "./GoliveSignoffDialog";
+import { deviceCoverage } from "../lib/golive-signoff";
 import { GoliveAttentionPanel } from "./GoliveAttentionPanel";
 import { attentionList, retestChoices } from "../lib/golive-acceptance";
 import { doneKindOf } from "../lib/statistic";
@@ -579,12 +580,33 @@ export function GoliveBoard({ people, currentUserId, onError, onToast, onManageR
     risks, waived: required.filter(row => row.waivedAt).map(row => ({ ticketId: row.ticketId, deviceName: row.deviceName, waivedReason: row.waivedReason })), currentBuildId: currentBuild?.id ?? null,
   });
   const signoffSummary = (): SignoffSummary => {
-    const webCounts = { tested: 0, notNeeded: 0, cannotTest: 0, riskAccepted: 0 }, appCounts = { onDevices: 0, confirmed: 0, notNeeded: 0, cannotTest: 0, riskAccepted: 0 };
+    const webCounts = { tested: 0, notNeeded: 0, cannotTest: 0, riskAccepted: 0 }, appCounts = { confirmed: 0, notNeeded: 0, cannotTest: 0, riskAccepted: 0 };
+    let appTickets = 0;
     for (const item of tickets) {
       if (item.webStatus === "tested") webCounts.tested++; else if (item.webStatus === "not-needed") webCounts.notNeeded++; else if (item.webStatus === "cannot-test") webCounts.cannotTest++; else if (item.webStatus === "risk-accepted") webCounts.riskAccepted++;
-      if (item.doneAt) appCounts[doneKindOf({ assignee: item.assignee, assigneeUserId: item.assigneeUserId, doneAt: item.doneAt, skippedAt: item.skippedAt ?? null, skipKind: item.skipKind ?? "not-needed" })]++;
+      if (!item.doneAt) continue;
+      appTickets++;
+      const kind = doneKindOf({ assignee: item.assignee, assigneeUserId: item.assigneeUserId, doneAt: item.doneAt, skippedAt: item.skippedAt ?? null, skipKind: item.skipKind ?? "not-needed" });
+      if (kind !== "onDevices") appCounts[kind]++;
     }
-    return { name: current?.name || "", fixVersion: current?.fixVersion || "", build: currentBuild?.buildNumber || "", qeCount: web.qe.length, manual, web: webCounts, app: appCounts, attention: attention.items, noteRequired: attention.noteRequired };
+    // The tickets and devices behind each number the dialog lets a Manager open.
+    const riskOf = (ticketId: number, phase: string) => risks.find(row => row.ticketId === ticketId && row.phase === phase);
+    const ticketDetail = (item: Ticket, reason: string, note = "") => ({ ticketId: item.id, issueKey: item.issueKey, assignee: item.assignee, reason, note });
+    const notified = (yes: boolean | undefined) => yes ? "Đã báo scrum team" : "Chưa báo scrum team";
+    const appDone = (item: Ticket, kind: string) => !!item.doneAt && !!item.skippedAt && item.skipKind === kind;
+    const devices = deviceCoverage({ required, checks, tickets, nameOf: userId => people.find(person => person.userId === userId)?.displayName || "" });
+    return {
+      name: current?.name || "", fixVersion: current?.fixVersion || "", build: currentBuild?.buildNumber || "", qeCount: web.qe.length, manual,
+      web: webCounts, app: { ...appCounts, devicesTested: devices.tested.length, devicesUntested: devices.untested.length }, appTickets,
+      details: {
+        webCannotTest: tickets.filter(item => item.webStatus === "cannot-test").map(item => ticketDetail(item, item.webReason || "", notified(item.webNotified))),
+        webRiskAccepted: tickets.filter(item => item.webStatus === "risk-accepted").map(item => { const risk = riskOf(item.id, "web"); return ticketDetail(item, risk?.reason || "", risk ? "Chấp nhận bởi " + risk.acceptedBy : ""); }),
+        appCannotTest: tickets.filter(item => appDone(item, "cannot-test")).map(item => ticketDetail(item, item.skipReason || "", notified(item.skipNotified))),
+        appRiskAccepted: tickets.filter(item => appDone(item, "risk-accepted")).map(item => { const risk = riskOf(item.id, "app"); return ticketDetail(item, risk?.reason || item.skipReason || "", risk ? "Chấp nhận bởi " + risk.acceptedBy : ""); }),
+        devicesTested: devices.tested, devicesUntested: devices.untested,
+      },
+      attention: attention.items, noteRequired: attention.noteRequired,
+    };
   };
   const retestCandidates: RetestCandidate[] = retestChoices({ tickets, tickedTicketIds: checks.map(item => item.ticketId), appFailedIds, manual })
     .flatMap(choice => {

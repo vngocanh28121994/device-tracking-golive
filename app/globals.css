@@ -1804,3 +1804,29 @@ body .golive-skip-actions .golive-skip-button svg { flex: none; }
   .signoff-foot { display: grid; grid-template-columns: 1fr 2fr; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); }
   .signoff-note textarea { font-size: 16px; }
 }
+
+/* Sign-off numbers that open a detail bubble: the number is a button (dotted underline and a chevron),
+   and the bubble opens under its row with an arrow pointing back at the number. */
+.signoff-counts > .signoff-count-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; column-gap: 12px; }
+.signoff-count-button { display: inline-flex; align-items: center; gap: 2px; margin: -4px -6px; padding: 4px 6px; border: 0; border-radius: 8px; background: none; color: inherit; font: inherit; font-weight: inherit; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 4px; }
+.signoff-count-button:hover { background: var(--lavender); }
+.signoff-count-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.signoff-count-button svg { transition: transform .15s ease; }
+.signoff-count-row.is-open .signoff-count-button { background: var(--lavender); text-decoration: none; }
+.signoff-count-row.is-open .signoff-count-button svg { transform: rotate(180deg); }
+.signoff-detail { position: relative; grid-column: 1 / -1; margin: 10px 0 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--canvas); }
+.signoff-detail::before { content: ""; position: absolute; top: -7px; right: 18px; width: 12px; height: 12px; background: var(--canvas); border-top: 1px solid var(--line); border-left: 1px solid var(--line); transform: rotate(45deg); }
+.signoff-detail-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.signoff-detail-list li + li { padding-top: 10px; border-top: 1px solid var(--line); }
+.signoff-detail-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+.signoff-detail-title strong { color: var(--accent); font-size: 14px; font-weight: 650; }
+.signoff-detail-title strong.signoff-device-name { color: var(--ink); }
+.signoff-detail-title span { color: var(--muted); font-size: 13px; }
+.signoff-detail-list p { margin: 3px 0 0; font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
+.signoff-detail-list small { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; }
+.signoff-detail-list small.is-warn { color: #a3333d; font-weight: 600; }
+:root[data-theme="dark"] .signoff-detail-list small.is-warn { color: #e5abb0; }
+@media (max-width: 900px) {
+  .signoff-detail-title strong { font-size: 15px; }
+  .signoff-detail-list small { font-size: 13px; }
+}
