@@ -106,7 +106,7 @@ export async function GET(request: Request) {
           id: ticket.id, issueKey: ticket.issueKey, summary: ticket.summary,
           assignee: ticket.assignee,
           assigneeUserId: ticket.assigneeUserId ?? (ticket.assignee ? matchAccount(profiles, ticket.assignee) : null),
-          doneAt: ticket.doneAt, skippedAt: ticket.skippedAt, skippedBy: ticket.skippedBy, skipKind: ticket.skipKind,
+          doneAt: ticket.doneAt, skippedAt: ticket.skippedAt, skippedBy: ticket.skippedBy, skipKind: ticket.skipKind, skipReason: ticket.skipReason,
           failedAt: ticket.failedAt, failedBy: ticket.failedBy, failedReason: ticket.failedReason,
           webStatus: ticket.webStatus, webAt: ticket.webAt, webBy: ticket.webBy, webReason: ticket.webReason,
           testedDevices: tick?.devices ?? 0, lastCheckedAt: tick?.lastCheckedAt ?? null,

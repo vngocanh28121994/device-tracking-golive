@@ -1830,3 +1830,34 @@ body .golive-skip-actions .golive-skip-button svg { flex: none; }
   .signoff-detail-title strong { font-size: 15px; }
   .signoff-detail-list small { font-size: 13px; }
 }
+
+/* Statistic tester rows unfold the tester's tickets in that phase. The whole row is clickable; the name
+   is the keyboard-reachable button and carries a chevron that turns when open. */
+.stat-tester-row { cursor: pointer; }
+.stat-tester-row:hover td, .stat-tester-row.is-open td { background: #faf7fe; }
+.stat-tester-toggle { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.stat-tester-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 8px; }
+.stat-tester-chevron { flex: none; color: var(--muted); transition: transform .15s ease; }
+.stat-tester-row.is-open .stat-tester-chevron { transform: rotate(180deg); color: var(--accent); }
+.stat-tester-detail td { padding: 0 16px 14px; background: #faf7fe; }
+.stat-tester-tickets { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.stat-tester-tickets li { display: grid; gap: 3px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.stat-tester-ticket-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.stat-tester-ticket-head strong { color: var(--accent); font-size: 14px; font-weight: 650; }
+.stat-tester-ticket-head .status-chip { white-space: nowrap; }
+.stat-tester-ticket-summary { margin: 0; font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
+.stat-tester-tickets small { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.stat-tester-empty { margin: 0; padding: 8px 0; color: var(--muted); font-size: 13px; }
+:root[data-theme="dark"] .stat-tester-row:hover td, :root[data-theme="dark"] .stat-tester-row.is-open td, :root[data-theme="dark"] .stat-tester-detail td { background: #241b30; }
+@media (max-width: 900px) {
+  /* Rows are blocks on phones: the unfolded list takes the full width under its tester. */
+  body .stat-tester-table tr.stat-tester-row { margin: 0 -8px; padding: 12px 8px; border-radius: 10px; }
+  body .stat-tester-table tr.stat-tester-row.is-open { border-bottom: 0; border-radius: 10px 10px 0 0; background: #faf7fe; }
+  body .stat-tester-table tr.stat-tester-row td { background: none; }
+  body .stat-tester-table tr.stat-tester-detail { display: block; margin: 0 -8px 8px; padding: 0 8px 10px; border-radius: 0 0 10px 10px; background: #faf7fe; border-bottom: 0; }
+  body .stat-tester-table tr.stat-tester-detail td { display: block; padding: 0; background: none; }
+  .stat-tester-ticket-head strong { font-size: 15px; }
+  .stat-tester-ticket-summary { font-size: 15px; }
+  .stat-tester-tickets small { font-size: 13px; }
+  :root[data-theme="dark"] body .stat-tester-table tr.stat-tester-row.is-open, :root[data-theme="dark"] body .stat-tester-table tr.stat-tester-detail { background: #241b30; }
+}

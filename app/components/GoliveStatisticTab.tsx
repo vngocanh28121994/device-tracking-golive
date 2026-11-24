@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { Ban, Bell, CheckCircle2, ChevronDown, Clock, Globe, ListChecks, Rocket, Smartphone, X } from "lucide-react";
 import { HolderIdentity } from "./HolderIdentity";
 import { LoadingState } from "./LoadingState";
@@ -7,7 +7,7 @@ import { isManager as isManagerRole } from "../lib/roles";
 import { doneKindOf, markedAt, markedBy, markedHow, phaseOf, tallyByTester, tallyWebByTester, webKindOf, WebQe, WebSummary } from "../lib/statistic";
 
 type Release = { id: string; name: string; source: string; fixVersion: string; createdBy: string; createdAt: string; completedAt: string | null; completedBy: string | null; appPushedAt: string | null; total: number; done: number; failed: number; web: WebSummary };
-type Ticket = { id: number; issueKey: string; summary: string; assignee: string; assigneeUserId: string | null; doneAt: string | null; skippedAt: string | null; skippedBy: string | null; skipKind: string; testedDevices: number; lastCheckedAt: string | null; failedAt: string | null; failedBy: string | null; failedReason: string; webStatus: string | null; webAt: string | null; webBy: string | null; webReason: string };
+type Ticket = { id: number; issueKey: string; summary: string; assignee: string; assigneeUserId: string | null; doneAt: string | null; skippedAt: string | null; skippedBy: string | null; skipKind: string; skipReason?: string; testedDevices: number; lastCheckedAt: string | null; failedAt: string | null; failedBy: string | null; failedReason: string; webStatus: string | null; webAt: string | null; webBy: string | null; webReason: string };
 type Person = { userId: string; displayName: string; avatar: string; role?: string };
 // The hovered slice of a tester's bar, with the very tickets it stands for.
 type Tip = { x: number; y: number; label: string; tickets: Ticket[] };
@@ -52,6 +52,36 @@ const NO_WEB: WebSummary = { total: 0, signed: 0, done: false };
 // Tab 1 of the Statistic screen: every golive, its two phases and its tickets. The heading and the
 // tablist belong to StatisticBoard, so this renders only the tab's own body and keeps its state
 // while the QE tab is on screen.
+// One tester's tickets in one phase, unfolded under their row: what is still outstanding first.
+function TesterTickets({ tickets, phase }: { tickets: Ticket[]; phase: "web" | "app" }) {
+  const pending = (item: Ticket) => phase === "web" ? ["open", "failed"].includes(webKindOf(item.webStatus)) : !item.doneAt;
+  const rows = [...tickets].sort((a, b) => Number(pending(b)) - Number(pending(a)) || a.issueKey.localeCompare(b.issueKey, "vi", { numeric: true }));
+  if (!rows.length) return <p className="stat-tester-empty">Không có ticket nào.</p>;
+  return <ul className="stat-tester-tickets">{rows.map(item => {
+    let chip: React.ReactNode, meta = "", reason = "", failed = false;
+    if (phase === "web") {
+      const kind = webKindOf(item.webStatus);
+      chip = <span className={webChip(kind)}>{WEB_LABEL[kind]}</span>;
+      if (kind !== "open" && item.webAt) meta = prettyStamp(item.webAt) + (item.webBy ? " · " + item.webBy : "");
+      if (kind === "cannotTest" || kind === "failed" || kind === "riskAccepted") reason = item.webReason;
+      failed = kind === "failed";
+    } else {
+      const status = statusOf(item), at = markedAt(item);
+      chip = <span className={statusClass(status)}>{status}</span>;
+      if (item.doneAt || item.failedAt) meta = (at ? prettyStamp(at) : "Không rõ thời điểm") + " · " + markedHow(item) + (markedBy(item) ? " · " + markedBy(item) : "");
+      else meta = item.testedDevices > 0 ? "Đã tích " + item.testedDevices + " thiết bị, chưa đủ" : "Chưa đánh dấu";
+      reason = item.failedAt ? item.failedReason : item.skipKind === "cannot-test" || item.skipKind === "risk-accepted" ? item.skipReason || "" : "";
+      failed = !!item.failedAt;
+    }
+    return <li key={item.id}>
+      <div className="stat-tester-ticket-head"><strong>{item.issueKey}</strong>{chip}</div>
+      {item.summary && <p className="stat-tester-ticket-summary">{item.summary}</p>}
+      {meta && <small>{meta}</small>}
+      {reason && <small className={failed ? "stat-fail-reason" : ""}>{reason}</small>}
+    </li>;
+  })}</ul>;
+}
+
 export function GoliveStatisticTab({ people, currentUserId, onToast, onError }: { people: Person[]; currentUserId: string; onToast: (message: string) => void; onError: (message: string) => void }) {
   const [releases, setReleases] = useState<Release[] | null>(null), [error, setError] = useState("");
   const [open, setOpen] = useState<string[]>([]);
@@ -66,6 +96,8 @@ export function GoliveStatisticTab({ people, currentUserId, onToast, onError }: 
   const [webByRelease, setWebByRelease] = useState<Record<string, WebQe[]>>({});
   const isManager = isManagerRole(people.find(person => person.userId === currentUserId)?.role);
   const [tip, setTip] = useState<Tip | null>(null);
+  // The tester row whose tickets are unfolded, as "release|phase|name"; one at a time.
+  const [openTester, setOpenTester] = useState("");
   const [sending, setSending] = useState("");
 
   // Reminds each ticked ticket's tester; the server groups a tester's tickets into one notification.
@@ -244,10 +276,11 @@ export function GoliveStatisticTab({ people, currentUserId, onToast, onError }: 
                           const percent = tester.total ? Math.round(tester.done / tester.total * 100) : 0;
                           const parts = WEB_PARTS.filter(part => tester[part.kind] > 0);
                           const mine = (item: Ticket) => item.assignee.trim() === tester.name;
-                          return <tr key={tester.name || "__none__"}>
-                            <td className="golive-assignee">{tester.name
+                          const rowKey = release.id + "|web|" + tester.name, rowOpen = openTester === rowKey;
+                          return <Fragment key={tester.name || "__none__"}><tr className={"stat-tester-row" + (rowOpen ? " is-open" : "")} onClick={() => setOpenTester(rowOpen ? "" : rowKey)}>
+                            <td className="golive-assignee"><button type="button" className="stat-tester-toggle" aria-expanded={rowOpen} aria-label={(rowOpen ? "Ẩn" : "Xem") + " ticket của " + (tester.name || "chưa có người test")}>{tester.name
                               ? <HolderIdentity name={tester.name} avatar={account?.avatar || ""} role={account?.role} />
-                              : <span className="muted">Chưa có người test</span>}</td>
+                              : <span className="muted">Chưa có người test</span>}<ChevronDown className="stat-tester-chevron" size={16} aria-hidden="true" /></button></td>
                             <td className="stat-tester-done">
                               <span className="stat-stack" role="img" aria-label={tester.done + "/" + tester.total + " ticket đã xong web" + parts.map(part => ", " + tester[part.kind] + " " + part.label).join("")}>
                                 {parts.map(part => <span key={part.kind} className={"stat-stack-part stat-part-" + part.cls} style={{ width: tester[part.kind] / tester.total * 100 + "%" }}
@@ -261,7 +294,9 @@ export function GoliveStatisticTab({ people, currentUserId, onToast, onError }: 
                             <td className="stat-tester-open" data-label="chưa xong web"><strong className={tester.open + tester.failed > 0 ? "stat-count" : ""}
                               onMouseEnter={tester.open + tester.failed > 0 ? (event => showTip(event, tester, tester.open + tester.failed + " ticket chưa xong web", item => mine(item) && ["open", "failed"].includes(webKindOf(item.webStatus)))) : undefined}
                               onMouseLeave={() => setTip(null)}>{tester.open + tester.failed}</strong></td>
-                          </tr>;
+                          </tr>
+                          {rowOpen && <tr className="stat-tester-detail"><td colSpan={3}><TesterTickets tickets={(tickets || []).filter(mine)} phase="web" /></td></tr>}
+                          </Fragment>;
                         })}</tbody></table></div>}
                       </div>}
                       {/* A manual golive has no tickets, so each QE's own sign-off is all there is to show. */}
@@ -304,10 +339,11 @@ export function GoliveStatisticTab({ people, currentUserId, onToast, onError }: 
                     const account = people.find(item => item.userId === tester.userId);
                     const percent = tester.total ? Math.round(tester.done / tester.total * 100) : 0;
                     const parts = BAR_PARTS.filter(part => tester[part.kind] > 0);
-                    return <tr key={tester.name || "__none__"}>
-                      <td className="golive-assignee">{tester.name
+                    const rowKey = release.id + "|app|" + tester.name, rowOpen = openTester === rowKey;
+                    return <Fragment key={tester.name || "__none__"}><tr className={"stat-tester-row" + (rowOpen ? " is-open" : "")} onClick={() => setOpenTester(rowOpen ? "" : rowKey)}>
+                      <td className="golive-assignee"><button type="button" className="stat-tester-toggle" aria-expanded={rowOpen} aria-label={(rowOpen ? "Ẩn" : "Xem") + " ticket của " + (tester.name || "chưa có người test")}>{tester.name
                         ? <HolderIdentity name={tester.name} avatar={account?.avatar || ""} role={account?.role} />
-                        : <span className="muted">Chưa có người test</span>}</td>
+                        : <span className="muted">Chưa có người test</span>}<ChevronDown className="stat-tester-chevron" size={16} aria-hidden="true" /></button></td>
                       <td className="stat-tester-done">
                         <span className="stat-stack" role="img" aria-label={tester.done + "/" + tester.total + " ticket đã test" + parts.map(part => ", " + tester[part.kind] + " " + part.label).join("")}>
                           {parts.map(part => <span key={part.kind} className={"stat-stack-part stat-part-" + part.kind} style={{ width: tester[part.kind] / tester.total * 100 + "%" }}
@@ -323,7 +359,9 @@ export function GoliveStatisticTab({ people, currentUserId, onToast, onError }: 
                       <td className="stat-tester-open" data-label="chưa test"><strong className={tester.open > 0 ? "stat-count" : ""}
                         onMouseEnter={tester.open > 0 ? (event => showTip(event, tester, tester.open + " ticket chưa test", item => !item.doneAt)) : undefined}
                         onMouseLeave={() => setTip(null)}>{tester.open}</strong></td>
-                    </tr>;
+                    </tr>
+                    {rowOpen && <tr className="stat-tester-detail"><td colSpan={3}><TesterTickets tickets={(tickets || []).filter(item => item.assignee.trim() === tester.name)} phase="app" /></td></tr>}
+                    </Fragment>;
                   })}</tbody></table></div>}
                 </div>}
                 </div>}
