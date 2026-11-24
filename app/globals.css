@@ -1660,7 +1660,7 @@ body .golive-skip-actions .golive-skip-button svg { flex: none; }
 .revoke-options label:has(input:checked) { border-color: #28715d; background: #f3faf6; }
 .revoke-options small { display: block; color: var(--muted); }
 
-.app-push-dialog, .signoff-dialog { width: min(640px, calc(100vw - 32px)); }
+.app-push-dialog { width: min(640px, calc(100vw - 32px)); }
 .retest-picker { display: grid; gap: 8px; }
 .retest-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .retest-tools .search { flex: 1; min-width: 180px; }
@@ -1669,13 +1669,6 @@ body .golive-skip-actions .golive-skip-button svg { flex: none; }
 .retest-list li + li { border-top: 1px solid var(--line, #e3e6ea); }
 .retest-list label { display: flex; gap: 10px; align-items: flex-start; padding: 8px 12px; cursor: pointer; }
 .retest-main small { display: block; color: var(--muted); }
-.signoff-info { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px 16px; margin: 0; }
-.signoff-info dt { font-size: 12px; color: var(--muted); }
-.signoff-info dd { margin: 0; font-weight: 600; }
-.signoff-groups { display: flex; flex-wrap: wrap; gap: 12px 32px; }
-.signoff-groups h3, .signoff-attention h3 { margin: 0 0 4px; font-size: 14px; }
-.signoff-groups ul, .signoff-attention ul { margin: 0; padding-left: 18px; font-size: 13px; }
-.signoff-attention { max-height: 200px; overflow: auto; }
 .golive-build-tag { display: inline-flex; gap: 6px; align-items: center; margin-top: 6px; font-size: 12px; color: var(--muted); }
 .golive-build-old { color: #8a5a00; font-weight: 600; }
 .golive-risk-note { display: block; font-size: 12px; color: var(--muted); }
@@ -1716,4 +1709,98 @@ body .golive-skip-actions .golive-skip-button svg { flex: none; }
   .golive-attention-row { flex-wrap: wrap; }
   .golive-attention-row strong { flex: 1 1 100%; }
   .golive-attention-row .muted { flex: 1 1 auto; }
+}
+
+/* "Tổng kết trước khi hoàn thành": a full-size dialog in the app's design language. The header and the
+   actions stay put while the body scrolls: the whole screen on a phone, a large panel on desktop. */
+.signoff-dialog { position: fixed; inset: 0; margin: auto; padding: 0; border: 0; width: min(960px, calc(100vw - 48px)); height: min(880px, calc(100dvh - 48px)); max-height: none; overflow: hidden; color: var(--ink); }
+.signoff-dialog::backdrop { background: #28203470; }
+.signoff-form { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 100%; }
+.signoff-head { display: flex; align-items: center; gap: 12px; padding: 18px 24px; border-bottom: 1px solid var(--line); }
+.signoff-head-text { flex: 1 1 auto; min-width: 0; }
+.signoff-head h2 { margin: 0; font-size: 20px; font-weight: 650; line-height: 1.3; letter-spacing: -.02em; }
+.signoff-head p { margin: 2px 0 0; font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.signoff-body { display: grid; align-content: start; gap: 22px; padding: 22px 24px 28px; overflow-y: auto; overscroll-behavior: contain; }
+.signoff-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 24px; border-top: 1px solid var(--line); background: var(--surface); }
+.signoff-foot button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; }
+
+/* Release facts as tiles. */
+.signoff-info { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.signoff-info > div { min-width: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--canvas); }
+.signoff-info dt { font-size: 12px; color: var(--muted); }
+.signoff-info dd { margin: 4px 0 0; font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
+
+/* Phase totals: a card per phase, headed in the phase's colour, one row per outcome. */
+.signoff-phases { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.signoff-phases.is-single { grid-template-columns: minmax(0, 1fr); }
+.signoff-phase { --phase-tint: var(--lavender); --phase-ink: var(--accent); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--surface); }
+.signoff-phase-app { --phase-tint: #fff3e2; --phase-ink: #b7791f; }
+.signoff-phase-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--phase-tint); }
+.signoff-phase-icon { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: var(--surface); color: var(--phase-ink); flex: none; }
+.signoff-phase-head h3 { margin: 0; font-size: 15px; font-weight: 650; }
+.signoff-phase-head small { margin-left: auto; font-size: 13px; color: var(--muted); }
+.signoff-counts { margin: 0; padding: 4px 14px; }
+.signoff-counts > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.signoff-counts > div:last-child { border-bottom: 0; }
+.signoff-counts dt { font-size: 14px; color: var(--ink); }
+.signoff-counts dd { margin: 0; font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.signoff-counts > .is-zero dt, .signoff-counts > .is-zero dd { color: var(--muted); font-weight: 400; }
+.signoff-counts > .is-warn dd { color: #b45309; }
+
+/* What needs attention: one card per ticket, each reason tagged with its kind. */
+.signoff-section-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: var(--ink); }
+.signoff-section-head h3 { margin: 0; font-size: 15px; font-weight: 650; }
+.signoff-section-head > svg { color: var(--muted); }
+.signoff-count-badge { min-width: 24px; padding: 1px 8px; border-radius: 999px; background: #efedf2; color: var(--muted); font-size: 13px; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums; }
+.signoff-count-badge.is-warn { background: #fdecee; color: #a3333d; }
+.signoff-empty { display: flex; align-items: center; gap: 8px; margin: 0; padding: 12px 14px; border-radius: 12px; background: #e9f5ee; color: #28715d; font-size: 14px; }
+.signoff-items { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.signoff-item { padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.signoff-item-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 8px; }
+.signoff-item-head strong { color: var(--accent); font-size: 15px; font-weight: 650; }
+.signoff-item-head span { color: var(--muted); font-size: 14px; }
+.signoff-reasons { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.signoff-reasons li { display: flex; align-items: flex-start; gap: 10px; }
+.signoff-reason-text { min-width: 0; font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
+.signoff-kind { flex: none; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; line-height: 1.5; white-space: nowrap; background: #efedf2; color: #5c566a; }
+.signoff-kind-cannot-test { background: #fdf1e2; color: #8a5a17; }
+.signoff-kind-not-notified { background: #fdecee; color: #a3333d; }
+.signoff-kind-risk-accepted { background: #fbe9f2; color: #9b2c5a; }
+.signoff-kind-old-build { background: #e8eef7; color: #3b5a86; }
+
+/* The acceptance note, labelled like the app's other forms. */
+.signoff-note { display: grid; gap: 8px; }
+.signoff-note-label { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 650; color: var(--ink); }
+.signoff-note-tag { padding: 1px 8px; border-radius: 999px; background: #efedf2; color: var(--muted); font-size: 12px; font-weight: 600; }
+.signoff-note-tag.is-required { background: #fdecee; color: #a3333d; }
+.signoff-note textarea { width: 100%; min-height: 110px; padding: 12px 14px; border: 1px solid #ded5e7; border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; font-size: 15px; resize: vertical; }
+.signoff-note textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.signoff-note-hint { color: var(--muted); font-size: 13px; }
+
+:root[data-theme="dark"] .signoff-dialog::backdrop { background: #07050acc; }
+:root[data-theme="dark"] .signoff-phase-app { --phase-tint: #3d2e1a; --phase-ink: #f0c98d; }
+:root[data-theme="dark"] .signoff-counts > .is-warn dd { color: #f0b46b; }
+:root[data-theme="dark"] .signoff-count-badge, :root[data-theme="dark"] .signoff-note-tag, :root[data-theme="dark"] .signoff-kind { background: #332a3d; color: #c7bfcc; }
+:root[data-theme="dark"] .signoff-count-badge.is-warn, :root[data-theme="dark"] .signoff-note-tag.is-required, :root[data-theme="dark"] .signoff-kind-not-notified { background: #4c2224; color: #e5abb0; }
+:root[data-theme="dark"] .signoff-kind-cannot-test { background: #3d2e1a; color: #f0c98d; }
+:root[data-theme="dark"] .signoff-kind-risk-accepted { background: #45203a; color: #f0b3d0; }
+:root[data-theme="dark"] .signoff-kind-old-build { background: #1f2b3d; color: #a9c2e6; }
+:root[data-theme="dark"] .signoff-empty { background: #1d3229; color: #c4ecdc; }
+:root[data-theme="dark"] .signoff-note textarea { border-color: #453655; }
+
+@media (max-width: 900px) {
+  /* The whole screen on a phone, clear of the notch and the home indicator. */
+  .signoff-dialog { width: 100vw; max-width: none; height: 100dvh; border-radius: 0; animation: none; }
+  .signoff-head { padding: calc(12px + env(safe-area-inset-top)) 16px 12px; }
+  .signoff-head h2 { font-size: 17px; }
+  :root[data-theme="dark"] .signoff-dialog { border: 0; }
+  .signoff-body { gap: 20px; padding: 16px 16px 24px; }
+  .signoff-info { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .signoff-info > div { padding: 10px 12px; }
+  .signoff-phases { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .signoff-counts dt { font-size: 15px; }
+  /* The reason's kind sits above its text so the text keeps the full width. */
+  .signoff-reasons li { flex-direction: column; gap: 4px; }
+  .signoff-foot { display: grid; grid-template-columns: 1fr 2fr; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); }
+  .signoff-note textarea { font-size: 16px; }
 }
